@@ -30,8 +30,10 @@
     </button>
   </div>
 
-  <!-- Botones de acción -->
-  <div class="relative z-10 flex gap-3 px-8 pb-4">
+  <!-- Botones de estado + tabs + acciones -->
+  <div class="relative z-10 flex items-center gap-3 px-8 pb-4 flex-wrap">
+
+    <!-- Estados -->
     <button
       (click)="setEstado('acepto')"
       class="px-6 py-2 rounded-lg font-semibold text-white text-sm transition-all shadow"
@@ -39,9 +41,8 @@
       [class.ring-green-300]="estadoActivo === 'acepto'"
       [class.bg-green-500]="estadoActivo !== 'acepto'"
       [class.bg-green-700]="estadoActivo === 'acepto'"
-    >
-      ✓ Acepto
-    </button>
+    >✓ Acepto</button>
+
     <button
       (click)="setEstado('interesado')"
       class="px-6 py-2 rounded-lg font-semibold text-white text-sm transition-all shadow"
@@ -49,9 +50,8 @@
       [class.ring-yellow-300]="estadoActivo === 'interesado'"
       [class.bg-yellow-400]="estadoActivo !== 'interesado'"
       [class.bg-yellow-600]="estadoActivo === 'interesado'"
-    >
-      ★ Interesado
-    </button>
+    >★ Interesado</button>
+
     <button
       (click)="setEstado('sincontacto')"
       class="px-6 py-2 rounded-lg font-semibold text-white text-sm transition-all shadow"
@@ -59,172 +59,351 @@
       [class.ring-red-300]="estadoActivo === 'sincontacto'"
       [class.bg-red-500]="estadoActivo !== 'sincontacto'"
       [class.bg-red-700]="estadoActivo === 'sincontacto'"
-    >
-      ✕ Sin Contacto
-    </button>
+    >✕ Sin Contacto</button>
+
+    <button
+      (click)="setEstado('conabogado')"
+      class="px-6 py-2 rounded-lg font-semibold text-white text-sm transition-all shadow"
+      [class.ring-4]="estadoActivo === 'conabogado'"
+      [class.ring-red-300]="estadoActivo === 'conabogado'"
+      [class.bg-red-500]="estadoActivo !== 'conabogado'"
+      [class.bg-red-700]="estadoActivo === 'conabogado'"
+    >Con Abogado</button>
+
+    <button
+      (click)="setEstado('nointeresado')"
+      class="px-6 py-2 rounded-lg font-semibold text-white text-sm transition-all shadow"
+      [class.ring-4]="estadoActivo === 'nointeresado'"
+      [class.ring-red-300]="estadoActivo === 'nointeresado'"
+      [class.bg-red-500]="estadoActivo !== 'nointeresado'"
+      [class.bg-red-700]="estadoActivo === 'nointeresado'"
+    >No interesado</button>
 
     @if (estadoActivo) {
-      <span class="ml-4 self-center text-white text-sm font-medium bg-white/20 px-4 py-2 rounded-lg backdrop-blur-sm">
-        Estado:
-        <strong>
-          {{ estadoActivo === 'acepto' ? 'Acepto' : estadoActivo === 'interesado' ? 'Interesado' : 'Sin Contacto' }}
-        </strong>
+      <span class="self-center text-white text-sm font-medium bg-white/20 px-4 py-2 rounded-lg backdrop-blur-sm">
+        Estado: <strong>{{ estadoActivoLabel }}</strong>
       </span>
     }
+
+    <!-- Acciones derecha -->
+    <div class="ml-auto flex items-center gap-2">
+      <button
+        (click)="solicitarDatoNuevo()"
+        [disabled]="buscando"
+        class="bg-white border border-gray-200 text-gray-700 text-sm px-4 py-2 rounded shadow hover:bg-gray-50 transition disabled:opacity-60 flex items-center gap-2"
+      >
+        @if (buscando) {
+          <svg class="animate-spin h-4 w-4 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+        }
+        Solicitar Dato Nuevo
+      </button>
+
+      <button
+        (click)="generarAnexo()"
+        class="bg-white border border-gray-200 text-gray-700 text-sm px-4 py-2 rounded shadow hover:bg-gray-50 transition"
+      >
+        Generar ANEXO
+      </button>
+    </div>
   </div>
 
-  <!-- Cards -->
-  <div class="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pb-8">
-
-    <!-- Card caso accidente -->
-    <div class="bg-white rounded-2xl shadow-lg p-6">
-      <div class="flex items-start justify-between mb-5">
-        <div>
-          <h2 class="text-xl font-bold text-gray-800">{{ caso.nombre }}</h2>
-          <p class="text-sm text-gray-400 mt-1">CUIL: {{ caso.cuil }}</p>
-        </div>
-        <span class="text-xs px-3 py-1 rounded-full font-medium bg-pink-100 text-pink-700">
-          {{ caso.tipoAccidente }}
-        </span>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div class="bg-gray-50 rounded-xl p-3">
-          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Zona</p>
-          <p class="text-sm font-medium text-gray-700">{{ caso.zona }}</p>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3">
-          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Fecha accidente</p>
-          <p class="text-sm font-medium text-gray-700">{{ caso.fechaAccidente }}</p>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3">
-          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Días ILT</p>
-          <p class="text-2xl font-bold text-pink-600">{{ caso.diasILT }}</p>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3">
-          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Tipo registro</p>
-          <p class="text-sm font-medium text-gray-700">{{ caso.tipoRegistro }}</p>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3 col-span-2">
-          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Lesión</p>
-          <p class="text-sm font-medium text-gray-700">{{ caso.lesion }}</p>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3 col-span-2">
-          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Diagnóstico</p>
-          <p class="text-sm font-medium text-gray-700">{{ caso.diagnostico }}</p>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3">
-          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Registrado por</p>
-          <p class="text-sm font-medium text-gray-700">{{ caso.registradoPor }}</p>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3">
-          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Asignado a</p>
-          <p class="text-sm font-semibold text-pink-600">{{ caso.asignado }}</p>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3 col-span-2">
-          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Egreso</p>
-          <p class="text-sm font-medium text-gray-700">{{ caso.egreso }}</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Card info previsional -->
-    <div class="bg-white rounded-2xl shadow-lg p-6 flex flex-col gap-5">
-
-      <!-- Vínculos -->
-      <div>
-        <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">👥 Vínculos</h3>
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="bg-gray-100 text-xs text-gray-500 uppercase">
-              <th class="text-left px-3 py-2 rounded-tl-lg">Documento</th>
-              <th class="text-left px-3 py-2">Nombre</th>
-              <th class="text-left px-3 py-2">Relación</th>
-              <th class="text-left px-3 py-2 rounded-tr-lg">Contacto</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (v of previsional.vinculos; track v.documento) {
-              <tr class="border-b border-gray-100">
-                <td class="px-3 py-2 text-blue-600 font-medium">{{ v.documento }}</td>
-                <td class="px-3 py-2 text-gray-700">{{ v.nombre }}</td>
-                <td class="px-3 py-2 text-gray-500">{{ v.relacion }}</td>
-                <td class="px-3 py-2">
-                  <button
-                    (click)="abrirWhatsappVinculo(v.documento)"
-                    class="bg-green-500 hover:bg-green-600 text-white text-xs font-semibold px-3 py-1 rounded-lg transition"
-                  >
-                    WhatsApp
-                  </button>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Teléfono -->
-      <div>
-        <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">📞 Teléfono</h3>
-        <div class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
-          <div class="text-sm text-gray-700">
-            <p class="font-medium">{{ previsional.telefono }}</p>
-            <p class="text-xs text-gray-400">{{ previsional.compania }} · {{ previsional.origenTel }}</p>
-          </div>
-          <button
-            (click)="abrirWhatsapp()"
-            class="bg-green-500 hover:bg-green-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition"
-          >
-            WhatsApp
-          </button>
-        </div>
-      </div>
-<!-- Emails -->
-<div>
-  <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">@ Emails</h3>
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="bg-gray-100 text-xs text-gray-500 uppercase">
-        <th class="text-left px-3 py-2 rounded-tl-lg">Dirección</th>
-        <th class="text-left px-3 py-2 rounded-tr-lg">Fuente</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (e of previsional.emails; track e.direccion) {
-        <tr class="border-b border-gray-100">
-          <td class="px-3 py-2 text-blue-600 font-medium">{{ e.direccion }}</td>
-          <td class="px-3 py-2 text-gray-500">{{ e.fuente }}</td>
-        </tr>
+  <!-- Tabs: Caso / Historial -->
+  <div class="relative z-10 flex gap-3 px-8 pb-4">
+    <button
+      (click)="setSeccion('caso')"
+      class="px-6 py-2 rounded-lg font-semibold text-sm transition-all shadow"
+      [class.bg-white]="seccionActiva === 'caso'"
+      [class.text-pink-600]="seccionActiva === 'caso'"
+      [class.bg-white/20]="seccionActiva !== 'caso'"
+      [class.text-white]="seccionActiva !== 'caso'"
+    >
+      🗂 Caso actual
+    </button>
+    <button
+      (click)="setSeccion('historial')"
+      class="px-6 py-2 rounded-lg font-semibold text-sm transition-all shadow flex items-center gap-2"
+      [class.bg-white]="seccionActiva === 'historial'"
+      [class.text-pink-600]="seccionActiva === 'historial'"
+      [class.bg-white/20]="seccionActiva !== 'historial'"
+      [class.text-white]="seccionActiva !== 'historial'"
+    >
+      📋 Historial
+      @if (historial.length > 0) {
+        <span class="bg-pink-600 text-white text-xs rounded-full px-2 py-0.5">{{ historial.length }}</span>
       }
-    </tbody>
-  </table>
-</div>
-      <!-- Domicilios -->
-      <div>
-        <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">🏠 Domicilios</h3>
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="bg-gray-100 text-xs text-gray-500 uppercase">
-              <th class="text-left px-3 py-2 rounded-tl-lg">Domicilio</th>
-              <th class="text-left px-3 py-2">Localidad</th>
-              <th class="text-left px-3 py-2">Provincia</th>
-              <th class="text-left px-3 py-2">CP</th>
-              <th class="text-left px-3 py-2 rounded-tr-lg">Origen</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (d of previsional.domicilios; track d.domicilio) {
-              <tr class="border-b border-gray-100">
-                <td class="px-3 py-2 text-gray-700">{{ d.domicilio }}</td>
-                <td class="px-3 py-2 text-gray-700">{{ d.localidad }}</td>
-                <td class="px-3 py-2 text-gray-700">{{ d.provincia }}</td>
-                <td class="px-3 py-2 text-gray-500">{{ d.cp }}</td>
-                <td class="px-3 py-2 text-gray-500 text-xs">{{ d.origen }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+    </button>
+  </div>
 
-    </div>
+  <!-- CONTENIDO -->
+  <div class="relative z-10 px-8 pb-8">
+
+    <!-- SECCIÓN: CASO ACTUAL -->
+    @if (seccionActiva === 'caso') {
+      <div class="relative">
+
+        <!-- Overlay loading encima de las cards -->
+        @if (buscando) {
+          <div class="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl">
+            <div class="flex flex-col items-center gap-4 bg-white/80 backdrop-blur-sm px-10 py-8 rounded-2xl shadow-xl">
+              <svg class="animate-spin h-10 w-10 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+              </svg>
+              <div class="text-center">
+                <p class="text-lg font-bold tracking-widest text-gray-800 uppercase">Capeletti</p>
+                <p class="text-xs tracking-[0.2em] text-gray-500 uppercase mt-0.5">Abogados</p>
+                <p class="text-sm text-pink-600 font-medium mt-3">Buscando cliente entre lesiones...</p>
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Cards difuminadas cuando carga -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 transition-all duration-300"
+             [class.opacity-30]="buscando"
+             [class.pointer-events-none]="buscando"
+             [class.blur-sm]="buscando">
+
+          <!-- Card caso accidente -->
+          <div class="bg-white rounded-2xl shadow-lg p-6">
+            <div class="flex items-start justify-between mb-5">
+              <div>
+                <h2 class="text-xl font-bold text-gray-800">{{ caso.nombre }}</h2>
+                <p class="text-sm text-gray-400 mt-1">CUIL: {{ caso.cuil }}</p>
+              </div>
+              <span class="text-xs px-3 py-1 rounded-full font-medium bg-pink-100 text-pink-700">
+                {{ caso.tipoAccidente }}
+              </span>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="bg-gray-50 rounded-xl p-3">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Zona</p>
+                <p class="text-sm font-medium text-gray-700">{{ caso.zona }}</p>
+              </div>
+              <div class="bg-gray-50 rounded-xl p-3">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Fecha accidente</p>
+                <p class="text-sm font-medium text-gray-700">{{ caso.fechaAccidente }}</p>
+              </div>
+              <div class="bg-gray-50 rounded-xl p-3">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Días ILT</p>
+                <p class="text-2xl font-bold text-pink-600">{{ caso.diasILT }}</p>
+              </div>
+              <div class="bg-gray-50 rounded-xl p-3">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Lesión</p>
+                <p class="text-sm font-medium text-gray-700">{{ caso.lesion }}</p>
+              </div>
+              <div class="bg-gray-50 rounded-xl p-3 col-span-2">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Empresa</p>
+                <p class="text-sm font-medium text-gray-700">{{ caso.empresa }}</p>
+              </div>
+              <div class="bg-gray-50 rounded-xl p-3 col-span-2">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Diagnóstico</p>
+                <p class="text-sm font-medium text-gray-700">{{ caso.diagnostico }}</p>
+              </div>
+              <div class="bg-gray-50 rounded-xl p-3 col-span-2">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Ocupación</p>
+                <p class="text-sm font-medium text-gray-700">{{ caso.ocupacion }}</p>
+              </div>
+              <div class="bg-gray-50 rounded-xl p-3 col-span-2">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Registrado por</p>
+                <p class="text-sm font-medium text-gray-700">{{ caso.registradoPor }}</p>
+              </div>
+              <div class="bg-gray-50 rounded-xl p-3 col-span-2">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Egreso</p>
+                <p class="text-sm font-medium text-gray-700">{{ caso.egreso }}</p>
+              </div>
+              <div class="bg-gray-50 rounded-xl p-3 col-span-2">
+                <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Descripción del siniestro</p>
+                <p class="text-sm font-medium text-gray-700">{{ caso.descripcionSiniestro }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card previsional -->
+          <div class="bg-white rounded-2xl shadow-lg p-6 flex flex-col gap-5">
+
+            <div>
+              <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">👥 Vínculos</h3>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-100 text-xs text-gray-500 uppercase">
+                    <th class="text-left px-3 py-2 rounded-tl-lg">Documento</th>
+                    <th class="text-left px-3 py-2">Nombre</th>
+                    <th class="text-left px-3 py-2">Relación</th>
+                    <th class="text-left px-3 py-2 rounded-tr-lg">Contacto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (v of previsional.vinculos; track v.documento) {
+                    <tr class="border-b border-gray-100">
+                      <td class="px-3 py-2 text-blue-600 font-medium">{{ v.documento }}</td>
+                      <td class="px-3 py-2 text-gray-700">{{ v.nombre }}</td>
+                      <td class="px-3 py-2 text-gray-500">{{ v.relacion }}</td>
+                      <td class="px-3 py-2">
+                        <button
+                          (click)="abrirWhatsappVinculo(v.documento)"
+                          class="bg-green-500 hover:bg-green-600 text-white text-xs font-semibold px-3 py-1 rounded-lg transition"
+                        >WhatsApp</button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">📞 Teléfono</h3>
+              <div class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+                <div class="text-sm text-gray-700">
+                  <p class="font-medium">{{ previsional.telefono }}</p>
+                  <p class="text-xs text-gray-400">{{ previsional.compania }} · {{ previsional.origenTel }}</p>
+                </div>
+                <button
+                  (click)="abrirWhatsapp()"
+                  class="bg-green-500 hover:bg-green-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition"
+                >WhatsApp</button>
+              </div>
+            </div>
+
+            <div>
+              <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">@ Emails</h3>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-100 text-xs text-gray-500 uppercase">
+                    <th class="text-left px-3 py-2 rounded-tl-lg">Dirección</th>
+                    <th class="text-left px-3 py-2 rounded-tr-lg">Fuente</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (e of previsional.emails; track e.direccion) {
+                    <tr class="border-b border-gray-100">
+                      <td class="px-3 py-2 text-blue-600 font-medium">{{ e.direccion }}</td>
+                      <td class="px-3 py-2 text-gray-500">{{ e.fuente }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">🏠 Domicilios</h3>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-100 text-xs text-gray-500 uppercase">
+                    <th class="text-left px-3 py-2 rounded-tl-lg">Domicilio</th>
+                    <th class="text-left px-3 py-2">Localidad</th>
+                    <th class="text-left px-3 py-2">Provincia</th>
+                    <th class="text-left px-3 py-2">CP</th>
+                    <th class="text-left px-3 py-2 rounded-tr-lg">Origen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (d of previsional.domicilios; track d.domicilio) {
+                    <tr class="border-b border-gray-100">
+                      <td class="px-3 py-2 text-gray-700">{{ d.domicilio }}</td>
+                      <td class="px-3 py-2 text-gray-700">{{ d.localidad }}</td>
+                      <td class="px-3 py-2 text-gray-700">{{ d.provincia }}</td>
+                      <td class="px-3 py-2 text-gray-500">{{ d.cp }}</td>
+                      <td class="px-3 py-2 text-gray-500 text-xs">{{ d.origen }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- SECCIÓN: HISTORIAL -->
+    @if (seccionActiva === 'historial') {
+      <div class="flex flex-col gap-4">
+
+        @if (historial.length === 0) {
+          <div class="bg-white rounded-2xl shadow-lg p-12 text-center">
+            <p class="text-5xl mb-4">📭</p>
+            <p class="text-gray-500 font-medium">No hay casos en el historial todavía.</p>
+            <p class="text-sm text-gray-400 mt-1">Los casos se guardan acá al solicitar un dato nuevo.</p>
+          </div>
+        } @else {
+
+          <!-- Resumen rápido -->
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div class="bg-white rounded-2xl shadow p-4 col-span-2 md:col-span-1">
+              <p class="text-xs text-gray-400 uppercase tracking-wider">Total</p>
+              <p class="text-3xl font-bold text-gray-800">{{ historial.length }}</p>
+            </div>
+            <div class="bg-green-50 rounded-2xl shadow p-4">
+              <p class="text-xs text-green-500 uppercase tracking-wider">Acepto</p>
+              <p class="text-3xl font-bold text-green-600">{{ historial | countEstado:'acepto' }}</p>
+            </div>
+            <div class="bg-yellow-50 rounded-2xl shadow p-4">
+              <p class="text-xs text-yellow-500 uppercase tracking-wider">Interesado</p>
+              <p class="text-3xl font-bold text-yellow-500">{{ historial | countEstado:'interesado' }}</p>
+            </div>
+            <div class="bg-red-50 rounded-2xl shadow p-4">
+              <p class="text-xs text-red-400 uppercase tracking-wider">Sin Contacto</p>
+              <p class="text-3xl font-bold text-red-500">{{ historial | countEstado:'sincontacto' }}</p>
+            </div>
+            <div class="bg-gray-50 rounded-2xl shadow p-4">
+              <p class="text-xs text-gray-400 uppercase tracking-wider">Otros</p>
+              <p class="text-3xl font-bold text-gray-600">{{ historial | countEstado:'otros' }}</p>
+            </div>
+          </div>
+
+          <!-- Cards historial -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            @for (h of historial; track h.cuil + h.timestamp) {
+              <div class="bg-white rounded-2xl shadow-lg p-5">
+                <div class="flex items-start justify-between mb-3">
+                  <div>
+                    <p class="font-bold text-gray-800">{{ h.nombre }}</p>
+                    <p class="text-xs text-gray-400 mt-0.5">CUIL: {{ h.cuil }} · {{ h.timestamp }}</p>
+                  </div>
+                  <span class="text-xs px-3 py-1 rounded-full font-semibold" [ngClass]="getEstadoColor(h.estado)">
+                    {{ h.estadoLabel }}
+                  </span>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div class="bg-gray-50 rounded-xl p-3">
+                    <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Días ILT</p>
+                    <p class="text-2xl font-bold text-pink-600">{{ h.diasILT }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-xl p-3">
+                    <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Fecha acc.</p>
+                    <p class="text-sm font-medium text-gray-700">{{ h.fechaAccidente }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-xl p-3">
+                    <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Tipo</p>
+                    <p class="text-xs font-medium text-gray-700">{{ h.tipoAccidente }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-xl p-3 col-span-3">
+                    <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Zona</p>
+                    <p class="text-sm font-medium text-gray-700">{{ h.zona }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-xl p-3 col-span-3">
+                    <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Diagnóstico</p>
+                    <p class="text-sm font-medium text-gray-700">{{ h.diagnostico }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-xl p-3 col-span-3">
+                    <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Empresa</p>
+                    <p class="text-sm font-medium text-gray-700">{{ h.empresa }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-xl p-3 col-span-3">
+                    <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Egreso</p>
+                    <p class="text-sm font-medium text-gray-700">{{ h.egreso }}</p>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
   </div>
 </div>
