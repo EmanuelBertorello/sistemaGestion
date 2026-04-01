@@ -1,0 +1,230 @@
+<div class="relative min-h-screen bg-gray-100 overflow-hidden flex flex-col">
+
+  <!-- Blob fondo -->
+  <div class="absolute inset-0 z-0 pointer-events-none">
+    <svg viewBox="0 0 1440 800" preserveAspectRatio="xMidYMid slice"
+         xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
+      <defs>
+        <linearGradient id="blobGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#e91e8c;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#c084fc;stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <path d="M0,0 L600,0 Q750,200 600,400 Q450,600 650,800 L0,800 Z"
+            fill="url(#blobGrad2)" opacity="0.95"/>
+      <circle cx="280" cy="350" r="220" fill="white" opacity="0.06"/>
+      <circle cx="180" cy="420" r="150" fill="white" opacity="0.06"/>
+      <path d="M1440,800 L900,800 Q800,600 1000,500 Q1200,400 1440,600 Z"
+            fill="url(#blobGrad2)" opacity="0.5"/>
+    </svg>
+  </div>
+
+  <!-- Header -->
+  <div class="relative z-10 flex items-center justify-between px-8 py-4">
+    <div>
+      <div class="text-xl font-bold tracking-widest text-white uppercase drop-shadow">Capeletti</div>
+      <div class="text-xs tracking-[0.3em] text-pink-100 uppercase">Abogados · Panel Llamador</div>
+    </div>
+    <button class="bg-white border border-gray-200 text-gray-700 text-sm px-4 py-2 rounded shadow hover:bg-gray-50 transition">
+      Cerrar sesión
+    </button>
+  </div>
+
+  <!-- Botones de acción -->
+  <div class="relative z-10 flex gap-3 px-8 pb-4">
+    <button
+      (click)="setEstado('acepto')"
+      class="px-6 py-2 rounded-lg font-semibold text-white text-sm transition-all shadow"
+      [class.ring-4]="estadoActivo === 'acepto'"
+      [class.ring-green-300]="estadoActivo === 'acepto'"
+      [class.bg-green-500]="estadoActivo !== 'acepto'"
+      [class.bg-green-700]="estadoActivo === 'acepto'"
+    >
+      ✓ Acepto
+    </button>
+    <button
+      (click)="setEstado('interesado')"
+      class="px-6 py-2 rounded-lg font-semibold text-white text-sm transition-all shadow"
+      [class.ring-4]="estadoActivo === 'interesado'"
+      [class.ring-yellow-300]="estadoActivo === 'interesado'"
+      [class.bg-yellow-400]="estadoActivo !== 'interesado'"
+      [class.bg-yellow-600]="estadoActivo === 'interesado'"
+    >
+      ★ Interesado
+    </button>
+    <button
+      (click)="setEstado('sincontacto')"
+      class="px-6 py-2 rounded-lg font-semibold text-white text-sm transition-all shadow"
+      [class.ring-4]="estadoActivo === 'sincontacto'"
+      [class.ring-red-300]="estadoActivo === 'sincontacto'"
+      [class.bg-red-500]="estadoActivo !== 'sincontacto'"
+      [class.bg-red-700]="estadoActivo === 'sincontacto'"
+    >
+      ✕ Sin Contacto
+    </button>
+
+    @if (estadoActivo) {
+      <span class="ml-4 self-center text-white text-sm font-medium bg-white/20 px-4 py-2 rounded-lg backdrop-blur-sm">
+        Estado:
+        <strong>
+          {{ estadoActivo === 'acepto' ? 'Acepto' : estadoActivo === 'interesado' ? 'Interesado' : 'Sin Contacto' }}
+        </strong>
+      </span>
+    }
+  </div>
+
+  <!-- Cards -->
+  <div class="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-6 px-8 pb-8">
+
+    <!-- Card caso accidente -->
+    <div class="bg-white rounded-2xl shadow-lg p-6">
+      <div class="flex items-start justify-between mb-5">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800">{{ caso.nombre }}</h2>
+          <p class="text-sm text-gray-400 mt-1">CUIL: {{ caso.cuil }}</p>
+        </div>
+        <span class="text-xs px-3 py-1 rounded-full font-medium bg-pink-100 text-pink-700">
+          {{ caso.tipoAccidente }}
+        </span>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-gray-50 rounded-xl p-3">
+          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Zona</p>
+          <p class="text-sm font-medium text-gray-700">{{ caso.zona }}</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3">
+          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Fecha accidente</p>
+          <p class="text-sm font-medium text-gray-700">{{ caso.fechaAccidente }}</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3">
+          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Días ILT</p>
+          <p class="text-2xl font-bold text-pink-600">{{ caso.diasILT }}</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3">
+          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Tipo registro</p>
+          <p class="text-sm font-medium text-gray-700">{{ caso.tipoRegistro }}</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3 col-span-2">
+          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Lesión</p>
+          <p class="text-sm font-medium text-gray-700">{{ caso.lesion }}</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3 col-span-2">
+          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Diagnóstico</p>
+          <p class="text-sm font-medium text-gray-700">{{ caso.diagnostico }}</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3">
+          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Registrado por</p>
+          <p class="text-sm font-medium text-gray-700">{{ caso.registradoPor }}</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3">
+          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Asignado a</p>
+          <p class="text-sm font-semibold text-pink-600">{{ caso.asignado }}</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3 col-span-2">
+          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Egreso</p>
+          <p class="text-sm font-medium text-gray-700">{{ caso.egreso }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card info previsional -->
+    <div class="bg-white rounded-2xl shadow-lg p-6 flex flex-col gap-5">
+
+      <!-- Vínculos -->
+      <div>
+        <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">👥 Vínculos</h3>
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-100 text-xs text-gray-500 uppercase">
+              <th class="text-left px-3 py-2 rounded-tl-lg">Documento</th>
+              <th class="text-left px-3 py-2">Nombre</th>
+              <th class="text-left px-3 py-2">Relación</th>
+              <th class="text-left px-3 py-2 rounded-tr-lg">Contacto</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (v of previsional.vinculos; track v.documento) {
+              <tr class="border-b border-gray-100">
+                <td class="px-3 py-2 text-blue-600 font-medium">{{ v.documento }}</td>
+                <td class="px-3 py-2 text-gray-700">{{ v.nombre }}</td>
+                <td class="px-3 py-2 text-gray-500">{{ v.relacion }}</td>
+                <td class="px-3 py-2">
+                  <button
+                    (click)="abrirWhatsappVinculo(v.documento)"
+                    class="bg-green-500 hover:bg-green-600 text-white text-xs font-semibold px-3 py-1 rounded-lg transition"
+                  >
+                    WhatsApp
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Teléfono -->
+      <div>
+        <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">📞 Teléfono</h3>
+        <div class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+          <div class="text-sm text-gray-700">
+            <p class="font-medium">{{ previsional.telefono }}</p>
+            <p class="text-xs text-gray-400">{{ previsional.compania }} · {{ previsional.origenTel }}</p>
+          </div>
+          <button
+            (click)="abrirWhatsapp()"
+            class="bg-green-500 hover:bg-green-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition"
+          >
+            WhatsApp
+          </button>
+        </div>
+      </div>
+<!-- Emails -->
+<div>
+  <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">@ Emails</h3>
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-gray-100 text-xs text-gray-500 uppercase">
+        <th class="text-left px-3 py-2 rounded-tl-lg">Dirección</th>
+        <th class="text-left px-3 py-2 rounded-tr-lg">Fuente</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (e of previsional.emails; track e.direccion) {
+        <tr class="border-b border-gray-100">
+          <td class="px-3 py-2 text-blue-600 font-medium">{{ e.direccion }}</td>
+          <td class="px-3 py-2 text-gray-500">{{ e.fuente }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
+      <!-- Domicilios -->
+      <div>
+        <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">🏠 Domicilios</h3>
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-100 text-xs text-gray-500 uppercase">
+              <th class="text-left px-3 py-2 rounded-tl-lg">Domicilio</th>
+              <th class="text-left px-3 py-2">Localidad</th>
+              <th class="text-left px-3 py-2">Provincia</th>
+              <th class="text-left px-3 py-2">CP</th>
+              <th class="text-left px-3 py-2 rounded-tr-lg">Origen</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (d of previsional.domicilios; track d.domicilio) {
+              <tr class="border-b border-gray-100">
+                <td class="px-3 py-2 text-gray-700">{{ d.domicilio }}</td>
+                <td class="px-3 py-2 text-gray-700">{{ d.localidad }}</td>
+                <td class="px-3 py-2 text-gray-700">{{ d.provincia }}</td>
+                <td class="px-3 py-2 text-gray-500">{{ d.cp }}</td>
+                <td class="px-3 py-2 text-gray-500 text-xs">{{ d.origen }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
