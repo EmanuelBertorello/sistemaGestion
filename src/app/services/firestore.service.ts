@@ -172,7 +172,8 @@ export class FirestoreService {
     const usuarios = await this.getUsuarios();
     const apodoMap = new Map<string, string>();
     for (const u of usuarios) {
-      apodoMap.set(u.email, u.apodo || u.email);
+      const apodo = u.apodo?.trim() || u.email.split('@')[0];
+      apodoMap.set(u.email.toLowerCase(), apodo);
     }
 
     // Agrupar por procesadoPor
@@ -183,8 +184,8 @@ export class FirestoreService {
       if (!email) continue;
 
       if (!mapa.has(email)) {
-        // Prefer ASGINADO (apodo saved on the case), then users collection lookup, then email
-        const nombre = data['ASGINADO'] || apodoMap.get(email) || email;
+        // Prefer ASGINADO (apodo saved on the case), then users collection lookup, then part before @
+        const nombre = data['ASGINADO']?.trim() || apodoMap.get(email.toLowerCase()) || email.split('@')[0];
         mapa.set(email, {
           email,
           nombre,
@@ -199,8 +200,8 @@ export class FirestoreService {
 
       const entry = mapa.get(email)!;
       // Update nombre if we now have a better value (ASGINADO) and currently showing raw email
-      if (data['ASGINADO'] && entry.nombre === email) {
-        entry.nombre = data['ASGINADO'];
+      if (data['ASGINADO']?.trim() && entry.nombre === email.split('@')[0]) {
+        entry.nombre = data['ASGINADO'].trim();
       }
       entry.consumidos++;
 
