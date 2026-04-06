@@ -1,0 +1,11 @@
+{
+  "/certero-api": {
+    "target": "https://certero.com.ar",
+    "secure": true,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/certero-api": ""
+    },
+    "logLevel": "debug"
+  }
+}

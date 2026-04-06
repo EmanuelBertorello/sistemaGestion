@@ -1,93 +1,137 @@
-import { Component } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, PLATFORM_ID, Inject } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
+import { Router } from '@angular/router';
+import { AuthService } from '../../services/auth.service';
+import { FirestoreService } from '../../services/firestore.service';
+import { CerteroService, SumarioCertero } from '../../services/certero.service';
+import { CasoModel, EstadoCaso } from './caso.model';
 
 @Component({
   selector: 'app-dashboard-llamador',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './dashboard-llamador.html',
   styleUrls: ['./dashboard-llamador.css']
 })
-export class DashboardLlamador {
-  estadoActivo: string = '';
-  buscando: boolean = false;
-  seccionActiva: 'caso' | 'historial' = 'caso';
+export class DashboardLlamador implements OnInit, OnDestroy {
+  estadoActivo: EstadoCaso = '';
+  buscando = false;
+  cargandoInicial = true;
+  seccionActiva: 'caso' | 'historial' | 'interesados' = 'caso';
 
-  caso = {
-    nombre: 'OYARZUN MORALES JUAN JOSE',
-    zona: '022 - Región lumbosacra',
-    registradoPor: 'SWISS MEDICAL',
-    cuil: '20259945985',
-    tipoAccidente: 'Accidente Laboral',
-    fechaAccidente: '2024-01-19',
-    diasILT: 21,
-    empresa: 'EMPRESA DEMO',
-    lesion: '38 - Distensión muscular',
-    diagnostico: 'M518 - Otros trastornos de discos intervertebrales',
-    secuelas: 'Sin',
-    localidadOcurrencia: 'BAHIA BLANCA',
-    provinciaOcurrencia: 'BUENOS AIRES',
-    egreso: 'L - Alta médica c/regreso al trabajo',
-    ocupacion: 'OPERARIO',
-    descripcionSiniestro: 'Mientras realizaba sus tareas habituales, refiere dolor lumbar al efectuar esfuerzo físico.'
-  };
+  caso: CasoModel | null = null;
+  historial: CasoModel[] = [];
+  sinDatos = false;
+  sumario: SumarioCertero | null = null;
+  cargandoSumario = false;
 
-  previsional = {
-    apellido: 'BERTORELLO EMANUEL',
-    sexo: 'Masculino',
-    fechaNacimiento: '20/01/2003',
-    documento: '44.765.221',
-    tipoDocumento: 'DNI - B - Duplicado',
-    cuil: '20-44765221-9',
-    domicilio: 'GENERAL LÓPEZ 530, LAS ROSAS, SANTA FE',
-    situacionLaboral: 'MONOTRIBUTO B - PREST. DE SERVICIO O LOCACIÓN',
-    telefono: '0340615451619',
-    compania: 'AMX ARGENTINA',
-    localidadTel: 'SAN JORGE (PROV. SANTA FE)',
-    provinciaTel: 'SANTA FE',
-    origenTel: 'Laboral / ANSES',
-    vinculos: [
-      { documento: '28.964.565', nombre: 'BERTORELLO ELIAS DANIEL', relacion: 'PADRE/MADRE' },
-      { documento: '29.148.143', nombre: 'GONZALEZ MARCELA ALEJANDRA', relacion: 'VINCULADOS' },
-      { documento: '48.972.035', nombre: 'BERTORELLO MAIRA', relacion: 'HERMANO' }
-    ],
-    domicilios: [
-      { domicilio: 'GENERAL LÓPEZ 530', localidad: 'LAS ROSAS', provincia: 'SANTA FE', cp: '', origen: 'Padron 2025 / Padron 2023' },
-      { domicilio: 'ALFONSO HILLAR 719', localidad: 'LOS CARDOS', provincia: 'SANTA FE', cp: '', origen: 'Padron 2021' },
-      { domicilio: 'ALFONSO HILLAR 719', localidad: 'LOS CARDOS', provincia: '', cp: '', origen: 'Laboral' },
-      { domicilio: 'ALFONSO HILLAR 719', localidad: 'LOS CARDOS', provincia: 'SANTA FE', cp: '2533', origen: 'ANSES' }
-    ],
-    emails: [
-      { direccion: 'ema-ber2011@live.com.ar', fuente: 'Laboral / ANSES' }
-    ]
-  };
+  private apodoUsuario = '';
+  private pollingInterval: any = null;
 
-  historial: Array<{
-    nombre: string;
-    cuil: string;
-    estado: string;
-    estadoLabel: string;
-    fechaAccidente: string;
-    diasILT: number;
-    zona: string;
-    tipoAccidente: string;
-    empresa: string;
-    lesion: string;
-    diagnostico: string;
-    egreso: string;
-    registradoPor: string;
-    timestamp: string;
-  }> = [];
+  constructor(
+    private auth: AuthService,
+    private firestoreService: FirestoreService,
+    private certero: CerteroService,
+    private router: Router,
+    private cdr: ChangeDetectorRef,
+    @Inject(PLATFORM_ID) private platformId: object
+  ) {}
+
+  async ngOnInit() {
+    if (!isPlatformBrowser(this.platformId)) {
+      this.cargandoInicial = false;
+      return;
+    }
+
+    try {
+      const email = this.auth.getCurrentEmail();
+      this.apodoUsuario = await this.firestoreService.getApodoPorEmail(email);
+      await this.cargarSiguienteCaso();
+      await this.cargarHistorial();
+    } catch (e) {
+      console.error('Error al inicializar dashboard llamador:', e);
+    } finally {
+      this.cargandoInicial = false;
+      this.cdr.detectChanges();
+      if (this.sinDatos) {
+        this.iniciarPolling();
+      }
+    }
+  }
+
+  get interesados(): CasoModel[] {
+    return this.historial.filter(c => c.estado === 'interesado');
+  }
+
+  ngOnDestroy() {
+    this.detenerPolling();
+  }
+
+  private iniciarPolling() {
+    if (this.pollingInterval) return;
+    this.pollingInterval = setInterval(async () => {
+      if (this.buscando || this.caso) {
+        this.detenerPolling();
+        return;
+      }
+      try {
+        const siguiente = await this.firestoreService.getSiguienteCaso();
+        if (siguiente) {
+          this.caso = siguiente;
+          this.sinDatos = false;
+          this.detenerPolling();
+          this.cdr.detectChanges();
+        }
+      } catch (e) {
+        // silencioso, reintenta en 2s
+      }
+    }, 2000);
+  }
+
+  private detenerPolling() {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
+  }
+
+  private async cargarSiguienteCaso() {
+    this.sinDatos = false;
+    this.sumario = null;
+    const siguiente = await this.firestoreService.getSiguienteCaso();
+    if (siguiente) {
+      this.caso = siguiente;
+      this.cargarSumario(siguiente.CUIL);
+    } else {
+      this.caso = null;
+      this.sinDatos = true;
+    }
+  }
+
+  private async cargarSumario(cuil?: string) {
+    if (!cuil) return;
+    this.cargandoSumario = true;
+    this.cdr.detectChanges();
+    this.sumario = await this.certero.getSumario(cuil);
+    this.cargandoSumario = false;
+    this.cdr.detectChanges();
+  }
+
+  private async cargarHistorial() {
+    const email = this.auth.getCurrentEmail();
+    if (!email) return;
+    this.historial = await this.firestoreService.getHistorialPor(email);
+  }
 
   get estadoActivoLabel(): string {
-    const estados: Record<string, string> = {
+    const estados: Record<Exclude<EstadoCaso, ''>, string> = {
       acepto: 'Acepto',
       interesado: 'Interesado',
       sincontacto: 'Sin Contacto',
       conabogado: 'Con Abogado',
       nointeresado: 'No interesado'
     };
-    return estados[this.estadoActivo] || '';
+    return this.estadoActivo ? estados[this.estadoActivo] : '';
   }
 
   getEstadoColor(estado: string): string {
@@ -101,51 +145,68 @@ export class DashboardLlamador {
     return colores[estado] || 'bg-gray-100 text-gray-700';
   }
 
-  setEstado(estado: string): void {
+  countEstado(tipo: 'acepto' | 'interesado' | 'sincontacto' | 'otros'): number {
+    if (tipo === 'otros') {
+      return this.historial.filter(
+        h => h.estado !== 'acepto' && h.estado !== 'interesado' && h.estado !== 'sincontacto'
+      ).length;
+    }
+    return this.historial.filter(h => h.estado === tipo).length;
+  }
+
+  setEstado(estado: EstadoCaso): void {
     this.estadoActivo = estado;
   }
 
-  setSeccion(s: 'caso' | 'historial'): void {
-    this.seccionActiva = s;
+  setSeccion(seccion: 'caso' | 'historial' | 'interesados'): void {
+    this.seccionActiva = seccion;
   }
 
   abrirWhatsapp(): void {
-    window.open(`https://wa.me/${this.previsional.telefono.replace(/\D/g, '')}`, '_blank');
+    // No hay campo teléfono en la BD actual
+  }
+
+  abrirWaNumero(codigoArea: string, numero: string): void {
+    const tel = (codigoArea + numero).replace(/\D/g, '');
+    window.open(`https://wa.me/54${tel}`, '_blank');
   }
 
   abrirWhatsappVinculo(documento: string): void {
-    window.open(`https://wa.me/54${documento.replace(/\D/g, '')}`, '_blank');
+    const telefono = documento.replace(/\D/g, '');
+    window.open(`https://wa.me/54${telefono}`, '_blank');
   }
 
-  solicitarDatoNuevo(): void {
-    if (this.buscando) return;
+  async solicitarDatoNuevo(): Promise<void> {
+    if (this.buscando || !this.caso) return;
 
-    // Guardar en historial antes de buscar
-    if (this.estadoActivo) {
-      this.historial.unshift({
-        nombre: this.caso.nombre,
-        cuil: this.caso.cuil,
-        estado: this.estadoActivo,
-        estadoLabel: this.estadoActivoLabel,
-        fechaAccidente: this.caso.fechaAccidente,
-        diasILT: this.caso.diasILT,
-        zona: this.caso.zona,
-        tipoAccidente: this.caso.tipoAccidente,
-        empresa: this.caso.empresa,
-        lesion: this.caso.lesion,
-        diagnostico: this.caso.diagnostico,
-        egreso: this.caso.egreso,
-        registradoPor: this.caso.registradoPor,
-        timestamp: new Date().toLocaleTimeString('es-AR')
-      });
+    if (this.estadoActivo && this.caso.id) {
+      await this.firestoreService.marcarProcesado(
+        this.caso.id,
+        this.estadoActivo,
+        this.auth.getCurrentEmail(),
+        this.apodoUsuario
+      );
+      this.historial.unshift({ ...this.caso, estado: this.estadoActivo, procesado: true });
     }
 
     this.buscando = true;
+    this.estadoActivo = '';
     this.seccionActiva = 'caso';
-    setTimeout(() => {
-      this.buscando = false;
-      this.estadoActivo = '';
-    }, 1400);
+
+    await this.cargarSiguienteCaso();
+
+    this.buscando = false;
+    this.cdr.detectChanges();
+
+    if (this.sinDatos) {
+      this.iniciarPolling();
+    }
+  }
+
+  async cerrarSesion(): Promise<void> {
+    this.detenerPolling();
+    await this.auth.logout();
+    this.router.navigate(['/login']);
   }
 
   generarAnexo(): void {
@@ -155,10 +216,10 @@ export class DashboardLlamador {
 3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] >> endobj
 xref
 0 4
-0000000000 65535 f 
-0000000010 00000 n 
-0000000062 00000 n 
-0000000117 00000 n 
+0000000000 65535 f
+0000000010 00000 n
+0000000062 00000 n
+0000000117 00000 n
 trailer << /Root 1 0 R /Size 4 >>
 startxref
 178
@@ -166,7 +227,9 @@ startxref
     const blob = new Blob([pdfContent], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url; link.download = 'anexo.pdf'; link.click();
+    link.href = url;
+    link.download = 'anexo.pdf';
+    link.click();
     URL.revokeObjectURL(url);
   }
 }

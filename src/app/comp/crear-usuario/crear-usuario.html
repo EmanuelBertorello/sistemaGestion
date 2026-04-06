@@ -1,0 +1,242 @@
+<div class="relative min-h-screen bg-gray-100 overflow-hidden flex flex-col">
+
+  <!-- Blob fondo -->
+  <div class="absolute inset-0 z-0 pointer-events-none">
+    <svg viewBox="0 0 1440 800" preserveAspectRatio="xMidYMid slice"
+         xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
+      <defs>
+        <linearGradient id="blobGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#e91e8c;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#c084fc;stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <path d="M0,0 L600,0 Q750,200 600,400 Q450,600 650,800 L0,800 Z" fill="url(#blobGrad)" opacity="0.95"/>
+      <circle cx="280" cy="350" r="220" fill="white" opacity="0.06"/>
+      <circle cx="180" cy="420" r="150" fill="white" opacity="0.06"/>
+      <path d="M1440,800 L900,800 Q800,600 1000,500 Q1200,400 1440,600 Z" fill="url(#blobGrad)" opacity="0.5"/>
+    </svg>
+  </div>
+
+  <!-- Header -->
+  <div class="relative z-10 flex items-center justify-between px-8 py-4">
+    <div>
+      <div class="text-xl font-bold tracking-widest text-white uppercase drop-shadow">Capeletti</div>
+      <div class="text-xs tracking-[0.3em] text-pink-100 uppercase">Abogados · Gestión de Usuarios</div>
+    </div>
+    <button (click)="volver()"
+      class="bg-white border border-gray-200 text-gray-700 text-sm px-4 py-2 rounded shadow hover:bg-gray-50 transition">
+      ← Volver al panel
+    </button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="relative z-10 flex gap-3 px-8 pb-4">
+    <button (click)="setSeccion('crear')"
+      class="px-6 py-2 rounded-lg font-semibold text-sm transition-all shadow"
+      [class.bg-white]="seccion === 'crear'"
+      [class.text-pink-600]="seccion === 'crear'"
+      [class.bg-white/20]="seccion !== 'crear'"
+      [class.text-white]="seccion !== 'crear'">
+      + Crear usuario
+    </button>
+    <button (click)="setSeccion('administrar')"
+      class="px-6 py-2 rounded-lg font-semibold text-sm transition-all shadow flex items-center gap-2"
+      [class.bg-white]="seccion === 'administrar'"
+      [class.text-pink-600]="seccion === 'administrar'"
+      [class.bg-white/20]="seccion !== 'administrar'"
+      [class.text-white]="seccion !== 'administrar'">
+      👥 Administrar usuarios
+      @if (usuarios.length > 0) {
+        <span class="bg-pink-600 text-white text-xs rounded-full px-2 py-0.5">{{ usuarios.length }}</span>
+      }
+    </button>
+  </div>
+
+  <!-- Contenido -->
+  <div class="relative z-10 px-8 pb-8">
+
+    <!-- ══ CREAR USUARIO ══ -->
+    @if (seccion === 'crear') {
+      <div class="flex justify-center">
+        <div class="bg-white rounded-xl shadow-lg px-8 py-7 w-full max-w-sm">
+          <h2 class="text-lg font-bold text-gray-800 mb-5">Nuevo usuario</h2>
+
+          <!-- Email -->
+          <div class="mb-4">
+            <label class="block text-sm text-gray-700 mb-1">Correo electrónico</label>
+            <input type="email" [(ngModel)]="email" placeholder="usuario@ejemplo.com"
+              class="w-full px-3 py-2 bg-blue-50 border border-blue-100 rounded text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 transition"/>
+          </div>
+
+          <!-- Apodo -->
+          <div class="mb-4">
+            <label class="block text-sm text-gray-700 mb-1">Apodo <span class="text-gray-400">(opcional)</span></label>
+            <input type="text" [(ngModel)]="apodo" placeholder="Ej: GEORGINA"
+              class="w-full px-3 py-2 bg-blue-50 border border-blue-100 rounded text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 transition"/>
+          </div>
+
+          <!-- Contraseña -->
+          <div class="mb-4">
+            <label class="block text-sm text-gray-700 mb-1">Contraseña</label>
+            <div class="relative">
+              <input [type]="showPassword ? 'text' : 'password'" [(ngModel)]="password"
+                placeholder="Mínimo 6 caracteres"
+                class="w-full px-3 py-2 bg-blue-50 border border-blue-100 rounded text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 transition pr-10"/>
+              <button type="button" (click)="togglePassword()"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  @if (!showPassword) {
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  } @else {
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.97 9.97 0 012.186-3.568M6.53 6.53A9.956 9.956 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.966 9.966 0 01-4.073 5.025M3 3l18 18"/>
+                  }
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Confirmar -->
+          <div class="mb-4">
+            <label class="block text-sm text-gray-700 mb-1">Confirmar contraseña</label>
+            <input [type]="showPassword ? 'text' : 'password'" [(ngModel)]="confirmar"
+              placeholder="Repetí la contraseña"
+              class="w-full px-3 py-2 bg-blue-50 border border-blue-100 rounded text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 transition"/>
+          </div>
+
+          @if (errorMsg) {
+            <div class="mb-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{{ errorMsg }}</div>
+          }
+          @if (successMsg) {
+            <div class="mb-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">✓ {{ successMsg }}</div>
+          }
+
+          <button (click)="onSubmit()" [disabled]="loading"
+            class="w-full bg-pink-600 hover:bg-pink-700 disabled:bg-pink-300 text-white text-sm font-semibold py-2.5 rounded transition flex items-center justify-center gap-2">
+            @if (loading) {
+              <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+            }
+            {{ loading ? 'Creando...' : 'Crear usuario' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- ══ ADMINISTRAR USUARIOS ══ -->
+    @if (seccion === 'administrar') {
+
+      @if (cargandoUsuarios) {
+        <div class="flex justify-center py-16">
+          <div class="flex flex-col items-center gap-3">
+            <svg class="animate-spin h-8 w-8 text-pink-400" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <p class="text-sm text-pink-200">Cargando usuarios...</p>
+          </div>
+        </div>
+      }
+
+      @if (!cargandoUsuarios && usuarios.length === 0) {
+        <div class="bg-white rounded-2xl shadow-lg p-12 text-center max-w-lg mx-auto mt-4">
+          <p class="text-5xl mb-4">👤</p>
+          <p class="text-gray-600 font-semibold">No hay usuarios registrados todavía.</p>
+          <p class="text-sm text-gray-400 mt-1">Creá el primer usuario desde la solapa "Crear usuario".</p>
+        </div>
+      }
+
+      @if (!cargandoUsuarios && usuarios.length > 0) {
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-gray-600 uppercase tracking-wider">
+              👥 Usuarios registrados
+            </h3>
+            <span class="text-xs bg-pink-100 text-pink-700 px-3 py-1 rounded-full font-medium">
+              {{ usuarios.length }} usuario{{ usuarios.length !== 1 ? 's' : '' }}
+            </span>
+          </div>
+
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
+                <th class="text-left px-6 py-3">Usuario</th>
+                <th class="text-left px-6 py-3">Correo electrónico</th>
+                <th class="text-left px-6 py-3">Apodo</th>
+                <th class="text-center px-6 py-3">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (u of usuarios; track u.uid) {
+                <tr class="border-b border-gray-100 hover:bg-gray-50 transition">
+
+                  <!-- Avatar + uid -->
+                  <td class="px-6 py-4">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-full bg-pink-100 flex items-center justify-center font-bold text-pink-600 text-sm flex-shrink-0">
+                        {{ (u.apodo || u.email)[0].toUpperCase() }}
+                      </div>
+                      <span class="text-xs text-gray-400 font-mono truncate max-w-[80px]" title="{{ u.uid }}">
+                        {{ u.uid.slice(0, 8) }}…
+                      </span>
+                    </div>
+                  </td>
+
+                  <!-- Email -->
+                  <td class="px-6 py-4 text-gray-700">{{ u.email }}</td>
+
+                  <!-- Apodo — modo normal / modo edición -->
+                  <td class="px-6 py-4">
+                    @if (editandoUid === u.uid) {
+                      <input type="text" [(ngModel)]="apodoEdit"
+                        class="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        placeholder="Ingresá un apodo"/>
+                    } @else {
+                      @if (u.apodo) {
+                        <span class="bg-pink-50 text-pink-700 px-2 py-1 rounded-full text-xs font-semibold">{{ u.apodo }}</span>
+                      } @else {
+                        <span class="text-gray-400 text-xs italic">Sin apodo</span>
+                      }
+                    }
+                  </td>
+
+                  <!-- Acciones -->
+                  <td class="px-6 py-4 text-center">
+                    @if (editandoUid === u.uid) {
+                      <div class="flex items-center justify-center gap-2">
+                        <button (click)="guardarApodo(u)" [disabled]="guardandoApodo"
+                          class="bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                          @if (guardandoApodo) {
+                            <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                            </svg>
+                          }
+                          Guardar
+                        </button>
+                        <button (click)="cancelarEdicion()"
+                          class="text-gray-500 hover:text-gray-700 text-xs px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition">
+                          Cancelar
+                        </button>
+                      </div>
+                    } @else {
+                      <button (click)="iniciarEdicion(u)"
+                        class="text-blue-500 hover:text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50 transition">
+                        ✎ Editar apodo
+                      </button>
+                    }
+                  </td>
+
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+    }
+
+  </div>
+</div>
