@@ -1,9 +1,9 @@
 {
+  "functions": {
+    "source": "functions"
+  },
   "hosting": {
-    "predeploy": [
-      "ng build --configuration production",
-      "node copy-index.js"
-    ],
+    "site": "caoe2026",
     "public": "dist/my-app/browser",
     "ignore": [
       "firebase.json",

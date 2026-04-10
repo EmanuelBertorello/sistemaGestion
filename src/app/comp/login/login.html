@@ -13,8 +13,8 @@
          xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
       <defs>
         <linearGradient id="blobGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:#e91e8c;stop-opacity:1" />
-          <stop offset="100%" style="stop-color:#c084fc;stop-opacity:1" />
+          <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
         </linearGradient>
       </defs>
       <path d="M0,0 L600,0 Q750,200 600,400 Q450,600 650,800 L0,800 Z"
@@ -118,7 +118,7 @@
     <div class="mt-5">
       <button
         (click)="openResetModal()"
-        class="text-sm text-pink-300 hover:text-pink-200 transition bg-transparent border-none cursor-pointer"
+        class="text-sm text-blue-300 hover:text-blue-200 transition bg-transparent border-none cursor-pointer"
       >
         ¿Olvidaste tu contraseña?
       </button>
@@ -162,7 +162,7 @@
             <button
               (click)="sendReset()"
               [disabled]="resetLoading"
-              class="bg-pink-500 hover:bg-pink-600 disabled:bg-pink-300 text-white text-sm font-medium px-5 py-2 rounded transition"
+              class="bg-blue-600 hover:bg-blue-800 disabled:bg-blue-300 text-white text-sm font-medium px-5 py-2 rounded transition"
             >
               {{ resetLoading ? 'Enviando...' : 'Enviar enlace' }}
             </button>

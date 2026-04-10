@@ -1,6 +1,8 @@
 export type EstadoCaso =
   | 'acepto'
-  | 'interesado'
+  | 'pendiente'
+  | 'interesado'      // legacy (ahora es "pendiente")
+  | 'nocontesto'      // legacy (ahora es "pendiente")
   | 'sincontacto'
   | 'conabogado'
   | 'nointeresado'
@@ -95,4 +97,7 @@ export interface CasoModel {
   ASGINADO?: string;         // apodo del llamador (typo original del campo)
   procesadoTimestamp: any;
   creadoEn?: any;
+  historialEstados?: Array<{ estado: string; timestamp: string; por: string; apodo: string }>;
+  emailEnviado?: boolean;
+  certeroData?: Record<string, any>;
 }

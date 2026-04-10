@@ -5,6 +5,7 @@ import {
   sendPasswordResetEmail,
   signOut,
   createUserWithEmailAndPassword,
+  updatePassword,
   Auth,
   UserCredential,
   User
@@ -45,5 +46,15 @@ export class AuthService {
 
   isAdmin(): boolean {
     return this.auth.currentUser?.email === 'bcapeletti@hotmail.com';
+  }
+
+  async cambiarPassword(nuevaPassword: string): Promise<void> {
+    const user = this.auth.currentUser;
+    if (!user) throw new Error('No hay usuario autenticado');
+    await updatePassword(user, nuevaPassword);
+  }
+
+  getCurrentUid(): string {
+    return this.auth.currentUser?.uid ?? '';
   }
 }

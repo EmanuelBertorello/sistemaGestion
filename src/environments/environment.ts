@@ -1,6 +1,12 @@
 export const environment = {
   production: false,
-  certeroToken: '582fe46622f511f1bada005056017e8e',
+  certeroToken: '73e2400f32cb11f1b461005056017e8e',
+  certeroBase: 'https://certeroproxy-clyxrahtaa-uc.a.run.app/API/V1',
+  emailjs: {
+    serviceId:  'REEMPLAZAR_SERVICE_ID',
+    templateId: 'REEMPLAZAR_TEMPLATE_ID',
+    publicKey:  'REEMPLAZAR_PUBLIC_KEY',
+  },
   firebase: {
     apiKey: "AIzaSyCD6mhPkLrKJ85uyGj9p08jKC9lp84eJnY",
     authDomain: "bdcap-a3b7b.firebaseapp.com",

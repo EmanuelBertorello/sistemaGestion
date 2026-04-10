@@ -1,4 +1,4 @@
-<div class="relative min-h-screen bg-gray-100 overflow-hidden flex flex-col">
+<div class="relative min-h-screen bg-gray-100 flex flex-col">
 
   <!-- Blob fondo -->
   <div class="absolute inset-0 z-0 pointer-events-none">
@@ -6,8 +6,8 @@
          xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
       <defs>
         <linearGradient id="blobAdmin" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:#e91e8c;stop-opacity:1" />
-          <stop offset="100%" style="stop-color:#c084fc;stop-opacity:1" />
+          <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
         </linearGradient>
       </defs>
       <path d="M0,0 L600,0 Q750,200 600,400 Q450,600 650,800 L0,800 Z" fill="url(#blobAdmin)" opacity="0.95"/>
@@ -17,32 +17,55 @@
     </svg>
   </div>
 
-  <!-- Header -->
-  <div class="relative z-10 flex items-center justify-between px-8 py-4">
-    <div>
-      <div class="text-xl font-bold tracking-widest text-white uppercase drop-shadow">Capeletti</div>
-      <div class="text-xs tracking-[0.3em] text-pink-100 uppercase">Abogados · Panel Administrador</div>
-    </div>
-    <div class="flex gap-2">
-      <button (click)="irACrearUsuario()"
-        class="bg-white border border-gray-200 text-gray-700 text-sm px-4 py-2 rounded shadow hover:bg-gray-50 transition">
-        + Crear usuario
-      </button>
-      <button (click)="cerrarSesion()"
-        class="bg-white border border-gray-200 text-gray-700 text-sm px-4 py-2 rounded shadow hover:bg-gray-50 transition">
-        Cerrar sesión
-      </button>
-    </div>
-  </div>
+  <!-- Header + Tabs: banda azul fija -->
+  <div class="relative z-10 bg-gradient-to-r from-blue-900 to-blue-700 shadow-lg">
 
-  <!-- Tabs -->
-  <div class="relative z-10 flex gap-2 px-8 pb-4 flex-wrap">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-8 py-4">
+      <div>
+        <div class="text-xl font-bold tracking-widest text-white uppercase drop-shadow">Capeletti</div>
+        <div class="text-xs tracking-[0.3em] text-blue-200 uppercase">Abogados · Panel Administrador</div>
+      </div>
+
+      <!-- Usuarios conectados -->
+      <button
+        (click)="mostrarConectados = !mostrarConectados"
+        class="flex items-center gap-2 bg-white/10 rounded-xl px-4 py-2 border border-white/20 hover:bg-white/20 transition cursor-pointer select-none">
+        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0"></span>
+        <span class="text-white text-xs font-semibold uppercase tracking-wider">
+          {{ usuariosConectados.length }} conectado{{ usuariosConectados.length !== 1 ? 's' : '' }}
+        </span>
+        <svg class="w-3 h-3 text-white/70 transition-transform" [class.rotate-180]="mostrarConectados"
+             fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+
+      <div class="flex items-center gap-2">
+        <!-- Datos en cola -->
+        <div class="flex flex-col items-center bg-white/10 border border-white/20 rounded-lg px-4 py-1.5">
+          <span class="text-white/60 text-[10px] uppercase tracking-wider leading-none">En cola</span>
+          <span class="text-white font-bold text-lg leading-tight">{{ casosEnCola }}</span>
+        </div>
+        <button (click)="irACrearUsuario()"
+          class="bg-white/10 border border-white/20 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/20 transition">
+          + Crear usuario
+        </button>
+        <button (click)="cerrarSesion()"
+          class="bg-white/10 border border-white/20 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/20 transition">
+          Cerrar sesión
+        </button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-2 px-8 pb-3 overflow-x-auto">
 
     <!-- Estadísticas -->
     <button (click)="setSeccion('estadisticas')"
-      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow"
+      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
       [class.bg-white]="seccionActiva === 'estadisticas'"
-      [class.text-pink-600]="seccionActiva === 'estadisticas'"
+      [class.text-blue-700]="seccionActiva === 'estadisticas'"
       [class.bg-white/20]="seccionActiva !== 'estadisticas'"
       [class.text-white]="seccionActiva !== 'estadisticas'">
       📊 Estadísticas
@@ -50,7 +73,7 @@
 
     <!-- Tab por cada estado -->
     <button (click)="setSeccion('acepto')"
-      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow"
+      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
       [class.bg-white]="seccionActiva === 'acepto'"
       [class.text-green-600]="seccionActiva === 'acepto'"
       [class.bg-white/20]="seccionActiva !== 'acepto'"
@@ -59,7 +82,7 @@
     </button>
 
     <button (click)="setSeccion('interesado')"
-      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow"
+      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
       [class.bg-white]="seccionActiva === 'interesado'"
       [class.text-yellow-500]="seccionActiva === 'interesado'"
       [class.bg-white/20]="seccionActiva !== 'interesado'"
@@ -68,7 +91,7 @@
     </button>
 
     <button (click)="setSeccion('sincontacto')"
-      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow"
+      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
       [class.bg-white]="seccionActiva === 'sincontacto'"
       [class.text-red-500]="seccionActiva === 'sincontacto'"
       [class.bg-white/20]="seccionActiva !== 'sincontacto'"
@@ -77,7 +100,7 @@
     </button>
 
     <button (click)="setSeccion('conabogado')"
-      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow"
+      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
       [class.bg-white]="seccionActiva === 'conabogado'"
       [class.text-orange-500]="seccionActiva === 'conabogado'"
       [class.bg-white/20]="seccionActiva !== 'conabogado'"
@@ -86,7 +109,7 @@
     </button>
 
     <button (click)="setSeccion('nointeresado')"
-      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow"
+      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
       [class.bg-white]="seccionActiva === 'nointeresado'"
       [class.text-gray-500]="seccionActiva === 'nointeresado'"
       [class.bg-white/20]="seccionActiva !== 'nointeresado'"
@@ -96,9 +119,9 @@
 
     <!-- Historial -->
     <button (click)="setSeccionHistorial()"
-      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow"
+      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
       [class.bg-white]="esHistorial"
-      [class.text-pink-600]="esHistorial"
+      [class.text-blue-700]="esHistorial"
       [class.bg-white/20]="!esHistorial"
       [class.text-white]="!esHistorial">
       📋 Historial
@@ -106,18 +129,39 @@
 
     <!-- Cargar BD -->
     <button (click)="setSeccion('cargar')"
-      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow"
+      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
       [class.bg-white]="esCargar"
-      [class.text-pink-600]="esCargar"
+      [class.text-blue-700]="esCargar"
       [class.bg-white/20]="!esCargar"
       [class.text-white]="!esCargar">
       📂 Cargar Base de Datos
     </button>
 
+    <!-- Duplicados -->
+    <button (click)="seccionActiva = 'duplicados'"
+      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
+      [class.bg-white]="esDuplicados"
+      [class.text-red-600]="esDuplicados"
+      [class.bg-white/20]="!esDuplicados"
+      [class.text-white]="!esDuplicados">
+      🗑 Duplicados
+    </button>
+
+    <!-- Noticias -->
+    <button (click)="seccionActiva = 'noticias'"
+      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
+      [class.bg-white]="seccionActiva === 'noticias'"
+      [class.text-red-600]="seccionActiva === 'noticias'"
+      [class.bg-white/20]="seccionActiva !== 'noticias'"
+      [class.text-white]="seccionActiva !== 'noticias'">
+      📰 Noticias
+    </button>
+
+    </div>
   </div>
 
   <!-- Contenido -->
-  <div class="relative z-10 px-8 pb-8 flex flex-col gap-6">
+  <div class="relative z-10 px-8 pb-8 flex flex-col gap-6 flex-1 bg-gray-100">
 
     <!-- ══════════════════ ESTADÍSTICAS ══════════════════ -->
     @if (seccionActiva === 'estadisticas') {
@@ -125,11 +169,11 @@
       @if (cargandoStats) {
         <div class="flex justify-center py-20">
           <div class="flex flex-col items-center gap-3">
-            <svg class="animate-spin h-8 w-8 text-pink-400" fill="none" viewBox="0 0 24 24">
+            <svg class="animate-spin h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
             </svg>
-            <p class="text-sm text-pink-200">Cargando estadísticas...</p>
+            <p class="text-sm text-blue-200">Cargando estadísticas...</p>
           </div>
         </div>
       }
@@ -138,35 +182,56 @@
         <div class="bg-white/10 rounded-2xl p-12 text-center">
           <p class="text-4xl mb-3">📊</p>
           <p class="text-white font-semibold">Todavía no hay casos procesados.</p>
-          <p class="text-sm text-pink-200 mt-1">Las estadísticas aparecerán cuando los llamadores comiencen a procesar casos.</p>
+          <p class="text-sm text-blue-200 mt-1">Las estadísticas aparecerán cuando los llamadores comiencen a procesar casos.</p>
         </div>
       }
 
       @if (!cargandoStats && llamadores.length > 0) {
 
+      <!-- Filtro de período -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-blue-200 font-semibold uppercase tracking-wider mr-1">Período:</span>
+        @for (p of PERIODOS; track p.value) {
+          <button (click)="setPeriodo(p.value)"
+            class="px-4 py-1.5 rounded-full text-xs font-semibold transition-all shadow-sm"
+            [class.bg-white]="periodoFiltro === p.value"
+            [class.text-blue-700]="periodoFiltro === p.value"
+            [class.bg-white/20]="periodoFiltro !== p.value"
+            [class.text-white]="periodoFiltro !== p.value">
+            {{ p.label }}
+          </button>
+        }
+      </div>
+
       <!-- Totales globales -->
       <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <div class="bg-white rounded-2xl shadow p-4 flex flex-col gap-1 col-span-2 md:col-span-1">
+        <div class="bg-white rounded-2xl shadow p-4 flex flex-col gap-1 col-span-2 md:col-span-1 cursor-pointer hover:ring-2 hover:ring-gray-300 transition select-none"
+             (click)="abrirModalGlobal('todos', 'Historial General', 'text-gray-800')">
           <p class="text-xs text-gray-400 uppercase tracking-wider">Total</p>
           <p class="text-3xl font-bold text-gray-800">{{ getTotal('consumidos') }}</p>
         </div>
-        <div class="bg-green-50 rounded-2xl shadow p-4 flex flex-col gap-1">
+        <div class="bg-green-50 rounded-2xl shadow p-4 flex flex-col gap-1 cursor-pointer hover:ring-2 hover:ring-green-400 transition select-none"
+             (click)="abrirModalGlobal('acepto', 'Acepto', 'text-green-600')">
           <p class="text-xs text-green-500 uppercase tracking-wider">Acepto</p>
           <p class="text-3xl font-bold text-green-600">{{ getTotal('acepto') }}</p>
         </div>
-        <div class="bg-yellow-50 rounded-2xl shadow p-4 flex flex-col gap-1">
+        <div class="bg-yellow-50 rounded-2xl shadow p-4 flex flex-col gap-1 cursor-pointer hover:ring-2 hover:ring-yellow-400 transition select-none"
+             (click)="abrirModalGlobal('interesado', 'Interesado', 'text-yellow-500')">
           <p class="text-xs text-yellow-500 uppercase tracking-wider">Interesado</p>
           <p class="text-3xl font-bold text-yellow-500">{{ getTotal('interesado') }}</p>
         </div>
-        <div class="bg-red-50 rounded-2xl shadow p-4 flex flex-col gap-1">
+        <div class="bg-red-50 rounded-2xl shadow p-4 flex flex-col gap-1 cursor-pointer hover:ring-2 hover:ring-red-400 transition select-none"
+             (click)="abrirModalGlobal('sincontacto', 'Sin Contacto', 'text-red-500')">
           <p class="text-xs text-red-400 uppercase tracking-wider">Sin Contacto</p>
           <p class="text-3xl font-bold text-red-500">{{ getTotal('sinContacto') }}</p>
         </div>
-        <div class="bg-orange-50 rounded-2xl shadow p-4 flex flex-col gap-1">
+        <div class="bg-orange-50 rounded-2xl shadow p-4 flex flex-col gap-1 cursor-pointer hover:ring-2 hover:ring-orange-400 transition select-none"
+             (click)="abrirModalGlobal('conabogado', 'Con Abogado', 'text-orange-500')">
           <p class="text-xs text-orange-400 uppercase tracking-wider">Con Abogado</p>
           <p class="text-3xl font-bold text-orange-500">{{ getTotal('conAbogado') }}</p>
         </div>
-        <div class="bg-gray-50 rounded-2xl shadow p-4 flex flex-col gap-1">
+        <div class="bg-gray-50 rounded-2xl shadow p-4 flex flex-col gap-1 cursor-pointer hover:ring-2 hover:ring-gray-400 transition select-none"
+             (click)="abrirModalGlobal('nointeresado', 'No Interesado', 'text-gray-500')">
           <p class="text-xs text-gray-400 uppercase tracking-wider">No Interesado</p>
           <p class="text-3xl font-bold text-gray-500">{{ getTotal('noInteresado') }}</p>
         </div>
@@ -179,7 +244,7 @@
             <div class="bg-white rounded-2xl shadow-lg p-6 flex flex-col gap-4" style="width: 340px;">
               <div class="flex items-center justify-between">
                 <h3 class="text-lg font-bold text-gray-800">{{ l.nombre }}</h3>
-                <span class="text-xs bg-pink-100 text-pink-700 px-3 py-1 rounded-full font-medium">Llamador</span>
+                <span class="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">Llamador</span>
               </div>
 
               <div class="grid grid-cols-2 gap-2">
@@ -187,23 +252,28 @@
                   <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Total consumidos</p>
                   <p class="text-3xl font-bold text-gray-800">{{ l.consumidos }}</p>
                 </div>
-                <div class="bg-green-50 rounded-xl p-3">
+                <div class="bg-green-50 rounded-xl p-3 cursor-pointer hover:ring-2 hover:ring-green-400 transition select-none"
+                     (click)="abrirModal(l, 'acepto', 'Acepto', 'text-green-600')">
                   <p class="text-xs text-green-600 uppercase tracking-wider mb-1">Acepto</p>
                   <p class="text-2xl font-bold text-green-600">{{ l.acepto }}</p>
                 </div>
-                <div class="bg-yellow-50 rounded-xl p-3">
+                <div class="bg-yellow-50 rounded-xl p-3 cursor-pointer hover:ring-2 hover:ring-yellow-400 transition select-none"
+                     (click)="abrirModal(l, 'interesado', 'Interesado', 'text-yellow-500')">
                   <p class="text-xs text-yellow-600 uppercase tracking-wider mb-1">Interesado</p>
                   <p class="text-2xl font-bold text-yellow-500">{{ l.interesado }}</p>
                 </div>
-                <div class="bg-red-50 rounded-xl p-3">
+                <div class="bg-red-50 rounded-xl p-3 cursor-pointer hover:ring-2 hover:ring-red-400 transition select-none"
+                     (click)="abrirModal(l, 'sincontacto', 'Sin Contacto', 'text-red-500')">
                   <p class="text-xs text-red-500 uppercase tracking-wider mb-1">Sin Contacto</p>
                   <p class="text-2xl font-bold text-red-500">{{ l.sinContacto }}</p>
                 </div>
-                <div class="bg-orange-50 rounded-xl p-3">
+                <div class="bg-orange-50 rounded-xl p-3 cursor-pointer hover:ring-2 hover:ring-orange-400 transition select-none"
+                     (click)="abrirModal(l, 'conabogado', 'Con Abogado', 'text-orange-500')">
                   <p class="text-xs text-orange-500 uppercase tracking-wider mb-1">Con Abogado</p>
                   <p class="text-2xl font-bold text-orange-500">{{ l.conAbogado }}</p>
                 </div>
-                <div class="bg-gray-50 rounded-xl p-3 col-span-2">
+                <div class="bg-gray-50 rounded-xl p-3 col-span-2 cursor-pointer hover:ring-2 hover:ring-gray-400 transition select-none"
+                     (click)="abrirModal(l, 'nointeresado', 'No Interesado', 'text-gray-500')">
                   <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">No Interesado</p>
                   <p class="text-2xl font-bold text-gray-500">{{ l.noInteresado }}</p>
                 </div>
@@ -320,7 +390,7 @@
           </div>
           <div>
             <h2 class="text-xl font-bold text-white drop-shadow">{{ seccion.label }}</h2>
-            <p class="text-xs text-pink-100">Total: <strong>{{ getTotal(seccion.campo) }}</strong> casos</p>
+            <p class="text-xs text-blue-100">Total: <strong>{{ getTotal(seccion.campo) }}</strong> casos</p>
           </div>
         </div>
 
@@ -332,7 +402,7 @@
               <!-- Header llamador -->
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center font-bold text-pink-600 text-sm">
+                  <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-700 text-sm">
                     {{ l.nombre[0] }}
                   </div>
                   <div>
@@ -352,8 +422,9 @@
                   <span>{{ l.consumidos > 0 ? ((+l[seccion.campo] / l.consumidos) * 100).toFixed(0) : 0 }}%</span>
                 </div>
                 <div class="bg-gray-100 rounded-full h-3 overflow-hidden">
-                  <div [class]="'h-3 rounded-full transition-all duration-500 ' + seccion.barColor"
-                       [style.width]="getBarWidth(+l[seccion.campo], l.consumidos)">
+                  <div [class]="'h-3 rounded-full ' + seccion.barColor"
+                       [style.width]="getBarWidth(+l[seccion.campo], l.consumidos)"
+                       style="transition: width 0.4s ease">
                   </div>
                 </div>
               </div>
@@ -422,6 +493,87 @@
           </table>
         </div>
 
+        <!-- ── Casos de este estado ── -->
+        @if (cargandoCasosEstado) {
+          <div class="flex justify-center py-10">
+            <svg class="animate-spin h-7 w-7 text-blue-300" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          </div>
+        }
+
+        @if (!cargandoCasosEstado && casosEstado.length === 0) {
+          <div class="bg-white/10 rounded-2xl p-10 text-center">
+            <p class="text-3xl mb-2">📭</p>
+            <p class="text-white font-semibold">No hay casos con estado "{{ seccion.label }}".</p>
+          </div>
+        }
+
+        @if (!cargandoCasosEstado && casosEstado.length > 0) {
+          <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 class="text-sm font-bold text-gray-600 uppercase tracking-wider">
+                {{ seccion.emoji }} {{ casosEstado.length }} caso(s) — {{ seccion.label }}
+              </h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
+                    <th class="text-left px-4 py-3">Trabajador</th>
+                    <th class="text-left px-4 py-3">CUIL</th>
+                    <th class="text-left px-4 py-3">Empresa</th>
+                    <th class="text-center px-4 py-3">Días ILT</th>
+                    <th class="text-left px-4 py-3">Llamador</th>
+                    <th class="text-left px-4 py-3">Fecha</th>
+                    @if (seccionActiva === 'sincontacto') {
+                      <th class="text-center px-4 py-3">Email</th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (c of casosEstado; track c.id) {
+                    <tr class="border-b border-gray-100 hover:bg-gray-50 transition cursor-pointer" (click)="casoDetalle = c">
+                      <td class="px-4 py-3 font-semibold text-gray-800">{{ c.Trabajador || '—' }}</td>
+                      <td class="px-4 py-3 font-mono text-xs text-gray-600">{{ c.CUIL || '—' }}</td>
+                      <td class="px-4 py-3 text-gray-600">{{ c.Emp_Denominacion || '—' }}</td>
+                      <td class="px-4 py-3 text-center font-bold" [class]="seccion.colorText">{{ c.Dias_ILT || '—' }}</td>
+                      <td class="px-4 py-3 text-gray-600">{{ c.ASGINADO || c.procesadoPor || '—' }}</td>
+                      <td class="px-4 py-3 text-gray-400 text-xs">
+                        {{ c.procesadoTimestamp?.toDate ? (c.procesadoTimestamp.toDate() | date:'dd/MM/yy HH:mm') : '—' }}
+                      </td>
+                      @if (seccionActiva === 'sincontacto') {
+                        <td class="px-4 py-3 text-center" (click)="$event.stopPropagation()">
+                          @if (c.emailEnviado || emailEnviado[c.id ?? c.CUIL ?? '']) {
+                            <span class="text-xs text-green-600 font-semibold">✓ Enviado</span>
+                          } @else if (emailError[c.id ?? c.CUIL ?? '']) {
+                            <span class="text-xs text-red-500">Error</span>
+                          } @else {
+                            <button (click)="enviarEmail(c)"
+                              [disabled]="enviandoEmail[c.id ?? c.CUIL ?? '']"
+                              class="inline-flex items-center gap-1 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+                              @if (enviandoEmail[c.id ?? c.CUIL ?? '']) {
+                                <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                                </svg>
+                              } @else {
+                                ✉
+                              }
+                              Enviar
+                            </button>
+                          }
+                        </td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+
       }
     }
 
@@ -434,14 +586,14 @@
         <div class="bg-white rounded-2xl shadow p-4 flex flex-wrap gap-3 items-center">
           <span class="text-sm font-semibold text-gray-600">Filtrar:</span>
           <select [(ngModel)]="historialFiltroLlamador"
-            class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-pink-300">
+            class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300">
             <option value="">Todos los llamadores</option>
             @for (l of llamadoresUnicos; track l) {
               <option [value]="l">{{ l }}</option>
             }
           </select>
           <select [(ngModel)]="historialFiltroEstado"
-            class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-pink-300">
+            class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300">
             <option value="">Todos los estados</option>
             <option value="acepto">Acepto</option>
             <option value="interesado">Interesado</option>
@@ -455,11 +607,11 @@
         @if (cargandoHistorial) {
           <div class="flex justify-center py-16">
             <div class="flex flex-col items-center gap-3">
-              <svg class="animate-spin h-8 w-8 text-pink-400" fill="none" viewBox="0 0 24 24">
+              <svg class="animate-spin h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
               </svg>
-              <p class="text-sm text-pink-200">Cargando historial...</p>
+              <p class="text-sm text-blue-200">Cargando historial...</p>
             </div>
           </div>
         }
@@ -472,7 +624,7 @@
         }
 
         @if (!cargandoHistorial && historialFiltrado.length > 0) {
-          <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div class="bg-white rounded-2xl shadow-lg">
             <div class="overflow-x-auto">
               <table class="w-full text-sm">
                 <thead>
@@ -488,7 +640,7 @@
                 </thead>
                 <tbody>
                   @for (c of historialFiltrado; track c.id) {
-                    <tr class="border-b border-gray-100 hover:bg-gray-50 transition">
+                    <tr class="border-b border-gray-100 hover:bg-gray-50 transition cursor-pointer" (click)="casoDetalle = c">
                       <td class="px-4 py-3 font-medium text-gray-800">{{ c.Trabajador }}</td>
                       <td class="px-4 py-3 text-gray-500 font-mono text-xs">{{ c.CUIL }}</td>
                       <td class="px-4 py-3 text-gray-600">{{ c.Emp_Denominacion }}</td>
@@ -513,6 +665,151 @@
       </div>
     }
 
+    <!-- ══════════════════ DUPLICADOS ══════════════════ -->
+    @if (esDuplicados) {
+      <div class="flex flex-col gap-6 max-w-lg mx-auto mt-4">
+
+      <!-- Card: Vaciar toda la BDmadre -->
+      <div class="bg-white border-2 border-red-200 rounded-2xl shadow-lg p-8">
+        <h3 class="text-xl font-bold text-red-700 mb-2">🗑 Vaciar toda la BDmadre</h3>
+        <p class="text-sm text-gray-500 mb-6">
+          Elimina <strong>absolutamente todos</strong> los documentos de la colección <code>BDmadre</code>,
+          incluyendo los ya procesados. Usá esto solo para limpiar datos incorrectos antes de una recarga.
+        </p>
+
+        @if (estadoVaciar === 'idle') {
+          <button (click)="estadoVaciar = 'confirm'"
+            class="w-full bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-3 rounded-xl transition border border-red-300">
+            Vaciar BDmadre
+          </button>
+        }
+        @if (estadoVaciar === 'confirm') {
+          <div class="bg-red-50 border border-red-300 rounded-xl p-5 flex flex-col gap-3">
+            <p class="text-sm font-bold text-red-700">⚠ ¿Estás seguro? Esta acción no se puede deshacer.</p>
+            <div class="flex gap-3">
+              <button (click)="vaciarBDMadre()"
+                class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl transition">
+                Sí, borrar todo
+              </button>
+              <button (click)="estadoVaciar = 'idle'"
+                class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2.5 rounded-xl transition">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        }
+        @if (estadoVaciar === 'borrando') {
+          <div class="flex flex-col items-center gap-3 py-4">
+            <svg class="animate-spin h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <p class="text-sm text-gray-600">Eliminando... <strong>{{ vaciarEliminados }}</strong> documentos borrados</p>
+          </div>
+        }
+        @if (estadoVaciar === 'done') {
+          <div class="bg-green-50 border border-green-200 rounded-xl p-5 text-center">
+            <p class="text-3xl font-bold text-green-600 mb-1">{{ vaciarEliminados }}</p>
+            <p class="text-sm text-green-700 font-medium">documentos eliminados de BDmadre</p>
+            <button (click)="estadoVaciar = 'idle'" class="mt-4 text-sm text-gray-500 underline hover:text-gray-700">Volver</button>
+          </div>
+        }
+        @if (estadoVaciar === 'error') {
+          <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{{ vaciarError }}</div>
+          <button (click)="estadoVaciar = 'idle'" class="mt-3 text-sm text-gray-500 underline">Reintentar</button>
+        }
+      </div>
+
+      <!-- Card: Eliminar Venta = SI -->
+      <div class="bg-white rounded-2xl shadow-lg p-8">
+        <h3 class="text-xl font-bold text-gray-800 mb-2">🚫 Eliminar casos con Venta = SI</h3>
+        <p class="text-sm text-gray-500 mb-6">
+          Elimina de la base de datos todos los registros <strong>no procesados</strong> cuyo campo
+          <strong>Venta</strong> tenga el valor <strong>SI</strong>. Estos casos no son accionables.
+        </p>
+
+        @if (estadoVentaSi === 'idle') {
+          <button (click)="eliminarVentaSi()"
+            class="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 rounded-xl transition shadow">
+            Eliminar Venta = SI
+          </button>
+        }
+        @if (estadoVentaSi === 'buscando') {
+          <div class="flex flex-col items-center gap-3 py-4">
+            <svg class="animate-spin h-8 w-8 text-orange-500" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <p class="text-sm text-gray-600">Eliminando... <strong>{{ ventaSiEliminados }}</strong> hasta ahora</p>
+          </div>
+        }
+        @if (estadoVentaSi === 'done') {
+          <div class="bg-green-50 border border-green-200 rounded-xl p-5 text-center">
+            <p class="text-3xl font-bold text-green-600 mb-1">{{ ventaSiEliminados }}</p>
+            <p class="text-sm text-green-700 font-medium">registro{{ ventaSiEliminados !== 1 ? 's' : '' }} eliminado{{ ventaSiEliminados !== 1 ? 's' : '' }}</p>
+            @if (ventaSiEliminados === 0) {
+              <p class="text-xs text-gray-400 mt-2">No se encontraron casos con Venta = SI.</p>
+            }
+            <button (click)="estadoVentaSi = 'idle'" class="mt-4 text-sm text-gray-500 underline hover:text-gray-700">Volver a ejecutar</button>
+          </div>
+        }
+        @if (estadoVentaSi === 'error') {
+          <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{{ ventaSiError }}</div>
+          <button (click)="estadoVentaSi = 'idle'" class="mt-3 text-sm text-gray-500 underline">Reintentar</button>
+        }
+      </div>
+
+      <!-- Card: Eliminar duplicados -->
+      <div class="bg-white rounded-2xl shadow-lg p-8">
+        <h3 class="text-xl font-bold text-gray-800 mb-2">🗑 Eliminar duplicados</h3>
+        <p class="text-sm text-gray-500 mb-6">
+          Busca en toda la base de datos registros con el mismo <strong>Nombre y Apellido</strong> y
+          <strong>Fecha de Accidente</strong>. Si hay duplicados, conserva el que ya fue procesado (o el primero)
+          y elimina el resto.
+        </p>
+
+        @if (estadoDupli === 'idle') {
+          <button (click)="buscarYEliminarDuplicados()"
+            class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-xl transition shadow">
+            Buscar y eliminar duplicados
+          </button>
+        }
+
+        @if (estadoDupli === 'buscando') {
+          <div class="flex flex-col items-center gap-3 py-4">
+            <svg class="animate-spin h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <p class="text-sm text-gray-600">Procesando... eliminados hasta ahora: <strong>{{ dupliEliminados }}</strong></p>
+          </div>
+        }
+
+        @if (estadoDupli === 'done') {
+          <div class="bg-green-50 border border-green-200 rounded-xl p-5 text-center">
+            <p class="text-3xl font-bold text-green-600 mb-1">{{ dupliEliminados }}</p>
+            <p class="text-sm text-green-700 font-medium">duplicado{{ dupliEliminados !== 1 ? 's' : '' }} eliminado{{ dupliEliminados !== 1 ? 's' : '' }}</p>
+            @if (dupliEliminados === 0) {
+              <p class="text-xs text-gray-400 mt-2">No se encontraron duplicados en la base de datos.</p>
+            }
+            <button (click)="estadoDupli = 'idle'"
+              class="mt-4 text-sm text-gray-500 underline hover:text-gray-700">
+              Volver a ejecutar
+            </button>
+          </div>
+        }
+
+        @if (estadoDupli === 'error') {
+          <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+            {{ dupliError }}
+          </div>
+          <button (click)="estadoDupli = 'idle'" class="mt-3 text-sm text-gray-500 underline">Reintentar</button>
+        }
+      </div>
+
+      </div><!-- fin flex-col gap-6 -->
+    }
+
     @if (esCargar) {
       <div class="flex flex-col gap-6">
 
@@ -527,13 +824,13 @@
             </div>
 
             <label class="group cursor-pointer block">
-              <div class="border-2 border-dashed border-gray-300 group-hover:border-pink-400 rounded-2xl p-16 flex flex-col items-center justify-center gap-5 transition">
+              <div class="border-2 border-dashed border-gray-300 group-hover:border-blue-500 rounded-2xl p-16 flex flex-col items-center justify-center gap-5 transition">
                 <div class="text-7xl">📂</div>
                 <div class="text-center">
                   <p class="text-base font-semibold text-gray-700">Hacé click para seleccionar un archivo</p>
                   <p class="text-sm text-gray-400 mt-1">Formatos soportados: .xlsx · .xls · .csv</p>
                 </div>
-                <span class="bg-pink-600 group-hover:bg-pink-700 text-white font-semibold px-8 py-3 rounded-xl transition text-sm">
+                <span class="bg-blue-700 group-hover:bg-blue-800 text-white font-semibold px-8 py-3 rounded-xl transition text-sm">
                   Seleccionar archivo
                 </span>
               </div>
@@ -569,20 +866,20 @@
 
             <!-- Cards de métricas -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div class="bg-pink-50 rounded-2xl p-5">
-                <p class="text-xs text-pink-500 uppercase tracking-wider mb-1">Registros</p>
-                <p class="text-4xl font-bold text-pink-600">{{ totalFilas }}</p>
-                <p class="text-xs text-pink-400 mt-1">filas en el Excel</p>
+              <div class="bg-blue-50 rounded-2xl p-5">
+                <p class="text-xs text-blue-600 uppercase tracking-wider mb-1">Registros</p>
+                <p class="text-4xl font-bold text-blue-700">{{ totalFilas }}</p>
+                <p class="text-xs text-blue-400 mt-1">filas en el Excel</p>
               </div>
               <div class="bg-blue-50 rounded-2xl p-5">
                 <p class="text-xs text-blue-500 uppercase tracking-wider mb-1">Columnas</p>
                 <p class="text-4xl font-bold text-blue-600">{{ columnas.length }}</p>
                 <p class="text-xs text-blue-400 mt-1">campos por registro</p>
               </div>
-              <div class="bg-purple-50 rounded-2xl p-5">
-                <p class="text-xs text-purple-500 uppercase tracking-wider mb-1">Lotes</p>
-                <p class="text-4xl font-bold text-purple-600">{{ totalFilas > 0 ? Math.ceil(totalFilas / 499) : 0 }}</p>
-                <p class="text-xs text-purple-400 mt-1">de 499 docs c/u</p>
+              <div class="bg-blue-50 rounded-2xl p-5">
+                <p class="text-xs text-blue-600 uppercase tracking-wider mb-1">Lotes</p>
+                <p class="text-4xl font-bold text-blue-700">{{ totalFilas > 0 ? Math.ceil(totalFilas / 499) : 0 }}</p>
+                <p class="text-xs text-blue-400 mt-1">de 499 docs c/u</p>
               </div>
               <div class="bg-gray-50 rounded-2xl p-5">
                 <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Destino</p>
@@ -655,7 +952,7 @@
 
             <!-- Botón confirmar -->
             <button (click)="confirmarUpload()"
-              class="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-4 rounded-2xl transition flex items-center justify-center gap-3 text-base shadow-lg shadow-pink-200">
+              class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-4 rounded-2xl transition flex items-center justify-center gap-3 text-base shadow-lg shadow-blue-200">
               🚀 Confirmar y subir {{ totalFilas }} registros a Firebase
             </button>
 
@@ -665,7 +962,7 @@
         <!-- PASO 3 — Subiendo (barra de progreso) -->
         @if (estadoUpload === 'subiendo') {
           <div class="bg-white rounded-2xl shadow-lg p-10 flex flex-col items-center gap-6">
-            <svg class="animate-spin h-12 w-12 text-pink-500" fill="none" viewBox="0 0 24 24">
+            <svg class="animate-spin h-12 w-12 text-blue-600" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
             </svg>
@@ -676,7 +973,7 @@
                 <span>{{ uploadSubidos }} / {{ uploadTotal }}</span>
               </div>
               <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden">
-                <div class="h-4 bg-pink-500 rounded-full transition-all duration-300"
+                <div class="h-4 bg-blue-600 rounded-full transition-all duration-300"
                      [style.width]="uploadPct + '%'">
                 </div>
               </div>
@@ -714,7 +1011,7 @@
             </div>
 
             <button (click)="resetUpload()"
-              class="bg-pink-600 hover:bg-pink-700 text-white font-semibold px-8 py-2.5 rounded-xl transition text-sm">
+              class="bg-blue-700 hover:bg-blue-800 text-white font-semibold px-8 py-2.5 rounded-xl transition text-sm">
               Cargar otro archivo
             </button>
 
@@ -724,5 +1021,265 @@
       </div>
     }
 
+    <!-- ══════════════════ NOTICIAS ══════════════════ -->
+    @if (seccionActiva === 'noticias') {
+      <div class="flex flex-col gap-6 max-w-2xl mx-auto w-full">
+
+        <div class="bg-white rounded-2xl shadow-lg p-6">
+          <h3 class="text-base font-bold text-gray-700 mb-4">📝 Publicar nueva noticia</h3>
+          <div class="flex flex-col gap-3">
+            <input [(ngModel)]="noticiasTitulo" type="text" placeholder="Título"
+              class="border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-300"/>
+            <textarea [(ngModel)]="noticiasCuerpo" rows="4" placeholder="Escribí el contenido de la noticia..."
+              class="border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"></textarea>
+            <button (click)="publicarNoticia()"
+              [disabled]="noticiasGuardando || !noticiasTitulo.trim() || !noticiasCuerpo.trim()"
+              class="self-end bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold text-sm px-6 py-2.5 rounded-lg transition">
+              @if (noticiasGuardando) { Publicando... } @else { Publicar }
+            </button>
+          </div>
+        </div>
+
+        @if (noticias.length === 0) {
+          <div class="bg-white rounded-2xl p-10 text-center text-gray-400">
+            <p class="text-4xl mb-3">📭</p>
+            <p class="font-medium">No hay noticias publicadas todavía.</p>
+          </div>
+        }
+        @for (noticia of noticias; track noticia.id) {
+          <div class="bg-white rounded-2xl shadow p-5 flex flex-col gap-2">
+            <div class="flex items-start justify-between gap-3">
+              <h4 class="font-bold text-gray-800 text-base">{{ noticia.titulo }}</h4>
+              <button (click)="eliminarNoticia(noticia.id)"
+                class="text-xs text-red-400 hover:text-red-600 transition shrink-0 font-medium">Eliminar</button>
+            </div>
+            <p class="text-sm text-gray-600 whitespace-pre-line">{{ noticia.cuerpo }}</p>
+            <p class="text-xs text-gray-400">— {{ noticia.autor }}</p>
+          </div>
+        }
+
+      </div>
+    }
+
   </div>
+
+  <!-- ══════════════════ MODAL DETALLE ══════════════════ -->
+  @if (modalVisible) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+         (click)="cerrarModal()">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+           (click)="$event.stopPropagation()">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h3 class="font-bold text-gray-800 text-lg">
+              @if (modalLlamador) {
+                {{ modalLlamador.nombre }}
+                <span class="mx-2 text-gray-300">·</span>
+              }
+              <span [class]="modalColorText">{{ modalEstadoLabel }}</span>
+            </h3>
+            <p class="text-xs text-gray-400 mt-0.5">{{ modalCasos.length }} registro(s)</p>
+          </div>
+          <button (click)="cerrarModal()"
+            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition text-lg font-bold">
+            ✕
+          </button>
+        </div>
+
+        <!-- Contenido -->
+        <div class="overflow-y-auto flex-1">
+          @if (modalCargando) {
+            <div class="flex justify-center items-center py-16">
+              <svg class="animate-spin h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+            </div>
+          }
+
+          @if (!modalCargando && modalCasos.length === 0) {
+            <div class="text-center py-16">
+              <p class="text-4xl mb-3">📭</p>
+              <p class="text-gray-500 font-medium">Sin registros para este estado.</p>
+            </div>
+          }
+
+          @if (!modalCargando && modalCasos.length > 0) {
+            <table class="w-full text-sm">
+              <thead class="sticky top-0 bg-gray-50">
+                <tr class="text-xs text-gray-500 uppercase">
+                  <th class="text-left px-5 py-3">Nombre y Apellido</th>
+                  <th class="text-left px-5 py-3">CUIL</th>
+                  <th class="text-left px-5 py-3">Registrado por</th>
+                  <th class="text-left px-5 py-3">Zona</th>
+                  <th class="text-center px-5 py-3">Días ILT</th>
+                  @if (modalEstadoKey === 'sincontacto') {
+                    <th class="text-center px-5 py-3">Email</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (c of modalCasos; track c.id) {
+                  <tr class="border-t border-gray-100 hover:bg-gray-50 transition cursor-pointer" (click)="casoDetalle = c">
+                    <td class="px-5 py-3 font-semibold text-gray-800">{{ c.Trabajador || '—' }}</td>
+                    <td class="px-5 py-3 font-mono text-xs text-gray-500">{{ c.CUIL || '—' }}</td>
+                    <td class="px-5 py-3 text-gray-600">{{ c.Registrado_Por || '—' }}</td>
+                    <td class="px-5 py-3 text-gray-600">{{ c.zona || '—' }}</td>
+                    <td class="px-5 py-3 text-center font-bold" [class]="modalColorText">{{ c.Dias_ILT || '—' }}</td>
+                    @if (modalEstadoKey === 'sincontacto') {
+                      <td class="px-5 py-3 text-center">
+                        <a [href]="generarMailto(c)" target="_blank"
+                          class="inline-flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+                          ✉ Enviar
+                        </a>
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+
+      </div>
+    </div>
+  }
+
 </div>
+
+<!-- ══════════ DETALLE CASO ══════════ -->
+@if (casoDetalle) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+       (click)="casoDetalle = null">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+         (click)="$event.stopPropagation()">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0 bg-gray-50">
+        <div>
+          <h3 class="font-bold text-gray-800 text-lg">{{ casoDetalle.Trabajador || '—' }}</h3>
+          <p class="text-xs text-gray-400 font-mono mt-0.5">CUIL: {{ casoDetalle.CUIL || '—' }}</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="px-3 py-1 rounded-full text-xs font-bold" [class]="colorEstado(casoDetalle.estado)">
+            {{ labelEstado(casoDetalle.estado) }}
+          </span>
+          <button (click)="casoDetalle = null"
+            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition text-lg font-bold">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Contenido scrollable -->
+      <div class="overflow-y-auto flex-1 p-6 flex flex-col gap-5">
+
+        <!-- Trabajador -->
+        <div class="bg-blue-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-blue-600 uppercase tracking-wider mb-3">Trabajador</p>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div><p class="text-xs text-gray-400">DNI</p><p class="font-semibold text-gray-800">{{ casoDetalle.NroDocumento || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">Sexo</p><p class="font-semibold text-gray-800">{{ casoDetalle.Sexo || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">Ocupación</p><p class="font-semibold text-gray-800">{{ casoDetalle.Ocupacion || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">Fecha Nac.</p><p class="font-semibold text-gray-800">{{ casoDetalle.FechaNacimiento || '—' }}</p></div>
+          </div>
+        </div>
+
+        <!-- Accidente -->
+        <div class="bg-orange-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-orange-600 uppercase tracking-wider mb-3">Accidente</p>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div><p class="text-xs text-gray-400">Tipo</p><p class="font-semibold text-gray-800">{{ casoDetalle.Tipo_Accidente || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">Fecha</p><p class="font-semibold text-gray-800">{{ casoDetalle.Fecha_Accidente || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">Días ILT</p><p class="font-bold text-orange-600 text-lg">{{ casoDetalle.Dias_ILT || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">Zona</p><p class="font-semibold text-gray-800">{{ casoDetalle.zona || casoDetalle.Zona_2 || '—' }}</p></div>
+            <div class="col-span-2"><p class="text-xs text-gray-400">Lesión</p><p class="font-semibold text-gray-800">{{ casoDetalle.Lesion_1 || '—' }}</p></div>
+            <div class="col-span-2"><p class="text-xs text-gray-400">Diagnóstico</p><p class="font-semibold text-gray-800">{{ casoDetalle.Diag_1 || '—' }}</p></div>
+          </div>
+        </div>
+
+        <!-- Empresa -->
+        <div class="bg-green-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-green-600 uppercase tracking-wider mb-3">Empleador</p>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div class="col-span-2"><p class="text-xs text-gray-400">Empresa</p><p class="font-semibold text-gray-800">{{ casoDetalle.Emp_Denominacion || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">CUIT</p><p class="font-semibold text-gray-800 font-mono text-xs">{{ casoDetalle.CUIT_Empleador || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">Actividad</p><p class="font-semibold text-gray-800">{{ casoDetalle.Emp_Actividad_Principal || '—' }}</p></div>
+            <div class="col-span-2"><p class="text-xs text-gray-400">Dirección</p><p class="font-semibold text-gray-800">{{ casoDetalle.Emp_Direccion || '—' }}</p></div>
+          </div>
+        </div>
+
+        <!-- Control -->
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Control</p>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div><p class="text-xs text-gray-400">Llamador</p><p class="font-semibold text-gray-800">{{ casoDetalle.ASGINADO || casoDetalle.procesadoPor || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">Fecha procesado</p><p class="font-semibold text-gray-800 text-xs">
+              {{ casoDetalle.procesadoTimestamp?.toDate ? (casoDetalle.procesadoTimestamp.toDate() | date:'dd/MM/yy HH:mm') : '—' }}
+            </p></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══════════ NOTIFICACIONES ACEPTO ══════════ -->
+@if (notificaciones.length > 0) {
+  <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 max-w-sm w-full">
+    @for (n of notificaciones; track n.id) {
+      <div class="bg-white border-l-4 border-green-500 rounded-xl shadow-2xl p-4 flex flex-col gap-1">
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="text-green-500 text-lg font-bold">✓</span>
+            <span class="text-sm font-bold text-gray-800">¡Nuevo ACEPTO!</span>
+          </div>
+          <button (click)="cerrarNotificacion(n.id)"
+            class="text-gray-400 hover:text-gray-600 text-lg leading-none font-bold transition shrink-0">✕</button>
+        </div>
+        <p class="text-sm font-semibold text-gray-800">{{ n.trabajador }}</p>
+        <p class="text-xs text-gray-500">CUIL: {{ n.cuil }}</p>
+        @if (n.empresa) {
+          <p class="text-xs text-gray-500">{{ n.empresa }}</p>
+        }
+        <div class="flex items-center gap-3 mt-1">
+          @if (n.diasILT) {
+            <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{{ n.diasILT }} días ILT</span>
+          }
+          @if (n.lesion) {
+            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{{ n.lesion }}</span>
+          }
+        </div>
+        <p class="text-xs text-green-600 font-medium mt-1">Llamador: {{ n.llamador }}</p>
+      </div>
+    }
+  </div>
+}
+
+<!-- Dropdown conectados: fuera de cualquier stacking context -->
+@if (mostrarConectados) {
+  <div class="fixed inset-0" style="z-index:9998" (click)="mostrarConectados = false"></div>
+  <div class="fixed min-w-[240px] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden" style="z-index:9999; top:72px; left:50%; transform:translateX(-50%)">
+    <div class="px-4 py-3 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+      <span class="text-xs font-bold text-blue-700 uppercase tracking-wider">Usuarios en línea</span>
+    </div>
+    @if (usuariosConectados.length === 0) {
+      <div class="px-4 py-5 text-center text-gray-400 text-sm">Nadie conectado</div>
+    }
+    @for (u of usuariosConectados; track u.email) {
+      <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0">
+        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+          {{ (u.apodo || u.email).charAt(0).toUpperCase() }}
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-gray-800">{{ u.apodo || '—' }}</p>
+          <p class="text-xs text-gray-400">{{ u.email }}</p>
+        </div>
+      </div>
+    }
+  </div>
+}
