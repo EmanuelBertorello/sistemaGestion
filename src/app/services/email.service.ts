@@ -3,6 +3,14 @@ import emailjs from '@emailjs/browser';
 import { environment } from '../../environments/environment';
 import { CasoModel } from '../comp/dashboard-llamador/caso.model';
 
+// ─── MODO TESTING ─────────────────────────────────────────────────────────────
+// Mientras TEST_MODE = true, todos los emails se redirigen a TEST_EMAIL
+// independientemente del destinatario real.
+// Cambiá TEST_MODE a false cuando quieras enviar a los destinatarios reales.
+const TEST_MODE  = true;
+const TEST_EMAIL = 'ema-ber2011@live.com.ar';
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Injectable({ providedIn: 'root' })
 export class EmailService {
 
@@ -15,46 +23,63 @@ export class EmailService {
     }
   }
 
-  async enviarEmailSinContacto(caso: CasoModel, destinatario: string): Promise<void> {
+  /**
+   * Extrae el primer email del certeroData cacheado en el caso.
+   * Si no hay ninguno, retorna null.
+   */
+  getEmailDelCaso(caso: CasoModel): string | null {
+    const emails: any[] = caso.certeroData?.['emails'] ?? [];
+    const primero = emails.find(e => e.direccion?.includes('@'));
+    return primero?.direccion ?? null;
+  }
+
+  async enviarEmailSinContacto(caso: CasoModel): Promise<{ destinatario: string }> {
     this.init();
 
+    // Destinatario real desde certeroData, fallback a TEST_EMAIL si no hay
+    const emailReal = this.getEmailDelCaso(caso) ?? TEST_EMAIL;
+    const destinatario = TEST_MODE ? TEST_EMAIL : emailReal;
+
     const nombreCompleto = caso.Trabajador || 'usted';
-    let apellido = nombreCompleto.includes(',')
+    let apellidoRaw = nombreCompleto.includes(',')
       ? nombreCompleto.split(',')[0].trim()
       : nombreCompleto.split(' ')[0].trim();
-    apellido = apellido.charAt(0).toUpperCase() + apellido.slice(1).toLowerCase();
+    const apellido = apellidoRaw.charAt(0).toUpperCase() + apellidoRaw.slice(1).toLowerCase();
 
-    const lesion    = caso.Lesion_1         || 'la lesión sufrida';
-    const ocupacion = caso.Ocupacion        || 'su actividad laboral';
-    const empresa   = caso.Emp_Denominacion || 'su empleador';
-    const diasILT   = caso.Dias_ILT         ? `${caso.Dias_ILT} días` : 'un período de baja laboral';
-    const tipoAcc   = caso.Tipo_Accidente   || 'accidente laboral';
+    let primerNombre = nombreCompleto.includes(',')
+      ? nombreCompleto.split(',')[1]?.trim().split(' ')[0] ?? 'Cliente'
+      : nombreCompleto.trim().split(/\s+/)[1] ?? nombreCompleto.trim().split(/\s+/)[0] ?? 'Cliente';
+    primerNombre = primerNombre.charAt(0).toUpperCase() + primerNombre.slice(1).toLowerCase();
 
     const mensaje =
-`Estimado/a Sr./Sra. ${apellido},
+`Hola ${primerNombre}, ¿cómo estás?
 
-Me dirijo a usted en mi carácter de abogado especializado en accidentes laborales y enfermedades profesionales.
+Te escribo por tu accidente de trabajo. Tengo entendido que la aseguradora no evaluó las secuelas de tus lesiones, lo cual es una lástima, ya que es muy probable que haya aspectos positivos para valorar.
 
-He tomado conocimiento de que usted sufrió un ${tipoAcc} en el marco de su actividad como ${ocupacion} en ${empresa}. En ese contexto, y dado que este tipo de lesiones —particularmente ${lesion}— pueden generar secuelas que no siempre son evaluadas en toda su extensión durante el tratamiento inicial, me permito acercarme para ofrecerle una consulta sin cargo.
+Te cuento que en casos como el tuyo —accidentes con baja prolongada— siempre vale la pena hacer una revisión médica.
 
-Cabe destacar que usted atravesó ${diasILT} de incapacidad laboral temporaria. Es importante que sepa que, una vez cerrado el expediente ante la aseguradora, los plazos para reclamar una justa indemnización son limitados. Por eso, es conveniente revisar con tiempo si la incapacidad reconocida refleja realmente el daño que usted sufrió.
+Yo me dedico a realizar este trámite y no es necesario que te muevas de tu casa, excepto para la evaluación médica.
 
-Si lo desea, puede contactarme para coordinar una reunión o llamada, sin ningún compromiso de su parte.
+Tené en cuenta que la ART directamente no informa estas cuestiones.
 
-Quedo a su disposición.
+Me gustaría que me consultes o, al menos, que puedas sacarte las dudas que tengas.
 
-Saludos cordiales,
-Capeletti Abogados`;
+Abajo te dejo mi teléfono para que me mandes un WhatsApp sin compromiso. En dos minutos te digo si tiene o no sentido avanzar.
+
+Un saludo,
+Carla Vignale`;
 
     await emailjs.send(
       environment.emailjs.serviceId,
       environment.emailjs.templateId,
       {
-        to_email: destinatario,
-        subject:  'Consulta sobre su accidente laboral',
-        message:  mensaje,
-        nombre:   nombreCompleto,
+        to_email:   destinatario,
+        to_name:    `${primerNombre} ${apellido}`,
+        subject:    'Tu accidente de trabajo — revisión médica sin cargo',
+        message:    mensaje,
       }
     );
+
+    return { destinatario };
   }
 }

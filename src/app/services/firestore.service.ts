@@ -258,6 +258,27 @@ export class FirestoreService {
     return usuario?.apodo || email;
   }
 
+  async asegurarUsuarioRegistrado(uid: string, email: string): Promise<void> {
+    const snap = await getDocs(query(collection(this.db, COL_USUARIOS), where('email', '==', email)));
+    if (snap.empty) {
+      // Usar uid como ID del documento
+      await setDoc(doc(this.db, COL_USUARIOS, uid), { uid, email, apodo: '', creadoEn: serverTimestamp() });
+    } else {
+      // Doc existe — asegurarse de que tenga el uid correcto guardado
+      const docData = snap.docs[0].data() as any;
+      if (!docData.uid) {
+        await updateDoc(snap.docs[0].ref, { uid });
+      }
+    }
+  }
+
+  async actualizarApodoPorEmail(email: string, apodo: string): Promise<void> {
+    const snap = await getDocs(query(collection(this.db, COL_USUARIOS), where('email', '==', email)));
+    if (!snap.empty) {
+      await updateDoc(snap.docs[0].ref, { apodo });
+    }
+  }
+
   async getHistorialPor(email: string): Promise<CasoModel[]> {
     const ref = collection(this.db, COL_CASOS);
     const q = query(
@@ -420,6 +441,18 @@ export class FirestoreService {
 
   async marcarEmailEnviado(id: string): Promise<void> {
     await updateDoc(doc(this.db, COL_CASOS, id), { emailEnviado: true });
+  }
+
+  async ocultarCasoDeHistorial(id: string, email: string): Promise<void> {
+    await updateDoc(doc(this.db, COL_CASOS, id), { ocultadoPor: arrayUnion(email) });
+  }
+
+  async marcarCartaImpresa(id: string): Promise<void> {
+    await updateDoc(doc(this.db, COL_CASOS, id), { cartaImpresa: true });
+  }
+
+  async guardarExpediente(id: string, nroExpediente: string): Promise<void> {
+    await updateDoc(doc(this.db, COL_CASOS, id), { nroExpediente });
   }
 
   async guardarSumarioCertero(id: string, sumario: object): Promise<void> {

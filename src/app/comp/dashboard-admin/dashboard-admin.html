@@ -161,7 +161,7 @@
   </div>
 
   <!-- Contenido -->
-  <div class="relative z-10 px-8 pb-8 flex flex-col gap-6 flex-1 bg-gray-100">
+  <div class="relative z-10 px-8 pb-8 flex flex-col gap-6">
 
     <!-- ══════════════════ ESTADÍSTICAS ══════════════════ -->
     @if (seccionActiva === 'estadisticas') {
@@ -527,8 +527,9 @@
                     <th class="text-center px-4 py-3">Días ILT</th>
                     <th class="text-left px-4 py-3">Llamador</th>
                     <th class="text-left px-4 py-3">Fecha</th>
-                    @if (seccionActiva === 'sincontacto') {
+                    @if (seccionActiva === 'sincontacto' || seccionActiva === 'nointeresado') {
                       <th class="text-center px-4 py-3">Email</th>
+                      <th class="text-center px-4 py-3">Carta</th>
                     }
                   </tr>
                 </thead>
@@ -543,7 +544,7 @@
                       <td class="px-4 py-3 text-gray-400 text-xs">
                         {{ c.procesadoTimestamp?.toDate ? (c.procesadoTimestamp.toDate() | date:'dd/MM/yy HH:mm') : '—' }}
                       </td>
-                      @if (seccionActiva === 'sincontacto') {
+                      @if (seccionActiva === 'sincontacto' || seccionActiva === 'nointeresado') {
                         <td class="px-4 py-3 text-center" (click)="$event.stopPropagation()">
                           @if (c.emailEnviado || emailEnviado[c.id ?? c.CUIL ?? '']) {
                             <span class="text-xs text-green-600 font-semibold">✓ Enviado</span>
@@ -562,6 +563,16 @@
                                 ✉
                               }
                               Enviar
+                            </button>
+                          }
+                        </td>
+                        <td class="px-4 py-3 text-center" (click)="$event.stopPropagation()">
+                          @if (c.cartaImpresa) {
+                            <span class="text-xs text-green-600 font-semibold">✓ Impresa</span>
+                          } @else {
+                            <button (click)="imprimirCarta(c)"
+                              class="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+                              🖨 Carta
                             </button>
                           }
                         </td>

@@ -18,7 +18,10 @@ import { NoticiaItem } from '../../services/firestore.service';
 })
 export class DashboardLlamador implements OnInit, OnDestroy {
   estadoActivo: EstadoCaso = '';
-  mostrarDescartarOpciones = false;   // sub-card con opciones de descarte
+  mostrarDescartarOpciones = false;
+  mostrarModalExpediente = false;
+  expedienteInput = '';
+  expedienteError = '';
   buscando = false;
   cargandoInicial = true;
   seccionActiva: 'caso' | 'acepto' | 'pendientes' | 'historial' = 'caso';
@@ -27,6 +30,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   mostrarModalPerfil = false;
   perfilApodo = '';
   perfilPassword = '';
+  perfilPasswordActual = '';
   perfilGuardando = false;
   perfilMensaje = '';
   perfilError = '';
@@ -95,6 +99,9 @@ export class DashboardLlamador implements OnInit, OnDestroy {
 
     try {
       const email = this.auth.getCurrentEmail();
+      const uid = this.auth.getCurrentUid();
+      // Registrar automáticamente si no existe en la colección usuarios
+      this.firestoreService.asegurarUsuarioRegistrado(uid, email);
       this.apodoUsuario = await this.firestoreService.getApodoPorEmail(email);
 
       // Registrar presencia y mantener heartbeat cada 30s
@@ -141,9 +148,11 @@ export class DashboardLlamador implements OnInit, OnDestroy {
 
   get historialFiltrado(): CasoModel[] {
     const q = this.busquedaHistorial.trim().toLowerCase();
+    const email = this.auth.getCurrentEmail();
     return this.historial.filter(c => {
+      // Ocultar casos marcados como ocultos por este llamador
+      if (c.ocultadoPor?.includes(email)) return false;
       if (q && !(c.Trabajador || '').toLowerCase().includes(q)) return false;
-      // filtro estado: si es 'pendiente' matchea también los legacy
       if (this.filtroEstado) {
         if (this.filtroEstado === 'pendiente' && !this.esPendiente(c.estado)) return false;
         if (this.filtroEstado !== 'pendiente' && c.estado !== this.filtroEstado) return false;
@@ -153,6 +162,21 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       if (this.filtroDiag && !(c.Diag_1 || '').toLowerCase().includes(this.filtroDiag.toLowerCase())) return false;
       return true;
     });
+  }
+
+  async ocultarCaso(caso: CasoModel): Promise<void> {
+    if (!caso.id) return;
+    const email = this.auth.getCurrentEmail();
+    await this.firestoreService.ocultarCasoDeHistorial(caso.id, email);
+    // Actualizar local para que desaparezca sin recargar
+    const idx = this.historial.findIndex(c => c.id === caso.id);
+    if (idx >= 0) {
+      this.historial[idx] = {
+        ...this.historial[idx],
+        ocultadoPor: [...(this.historial[idx].ocultadoPor ?? []), email]
+      };
+    }
+    this.cdr.detectChanges();
   }
 
   ngOnDestroy() {
@@ -291,8 +315,35 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   }
 
   setEstado(estado: EstadoCaso): void {
+    if (estado === 'acepto') {
+      this.expedienteInput = '';
+      this.expedienteError = '';
+      this.mostrarModalExpediente = true;
+      return;
+    }
     this.estadoActivo = estado;
     this.mostrarDescartarOpciones = false;
+  }
+
+  confirmarExpediente(): void {
+    if (!this.expedienteInput.trim()) {
+      this.expedienteError = 'El número de expediente es obligatorio.';
+      return;
+    }
+    this.estadoActivo = 'acepto';
+    this.mostrarDescartarOpciones = false;
+    this.mostrarModalExpediente = false;
+    // Guardar expediente en Firestore si ya hay un caso asignado
+    if (this.caso?.id) {
+      this.firestoreService.guardarExpediente(this.caso.id, this.expedienteInput.trim());
+      this.caso = { ...this.caso, nroExpediente: this.expedienteInput.trim() };
+    }
+  }
+
+  cancelarExpediente(): void {
+    this.mostrarModalExpediente = false;
+    this.expedienteInput = '';
+    this.expedienteError = '';
   }
 
   abrirDescartar(): void {
@@ -396,6 +447,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   abrirModalPerfil(): void {
     this.perfilApodo = this.apodoUsuario;
     this.perfilPassword = '';
+    this.perfilPasswordActual = '';
     this.perfilMensaje = '';
     this.perfilError = '';
     this.mostrarModalPerfil = true;
@@ -408,19 +460,23 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     this.perfilError = '';
     this.cdr.detectChanges();
     try {
-      const uid = this.auth.getCurrentUid();
+      const email = this.auth.getCurrentEmail();
       if (this.perfilApodo.trim() && this.perfilApodo.trim() !== this.apodoUsuario) {
-        await this.firestoreService.actualizarApodo(uid, this.perfilApodo.trim());
+        await this.firestoreService.actualizarApodoPorEmail(email, this.perfilApodo.trim());
         this.apodoUsuario = this.perfilApodo.trim();
       }
       if (this.perfilPassword.trim().length >= 6) {
-        await this.auth.cambiarPassword(this.perfilPassword.trim());
+        await this.auth.cambiarPassword(this.perfilPassword.trim(), this.perfilPasswordActual.trim() || undefined);
       }
       this.perfilMensaje = 'Datos actualizados correctamente.';
     } catch (e: any) {
-      this.perfilError = e.code === 'auth/requires-recent-login'
-        ? 'Por seguridad cerrá sesión, volvé a ingresar y cambiá la contraseña.'
-        : 'Error al guardar. Intentá de nuevo.';
+      if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+        this.perfilError = 'La contraseña actual es incorrecta.';
+      } else if (e.code === 'auth/requires-recent-login') {
+        this.perfilError = 'Por seguridad cerrá sesión, volvé a ingresar y cambiá la contraseña.';
+      } else {
+        this.perfilError = 'Error al guardar. Intentá de nuevo.';
+      }
     } finally {
       this.perfilGuardando = false;
       this.cdr.detectChanges();

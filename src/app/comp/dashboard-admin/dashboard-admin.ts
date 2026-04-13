@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { FirestoreService, UploadResult, LlamadorStats, NoticiaItem } from '../../services/firestore.service';
 import { EmailService } from '../../services/email.service';
+import { CerteroService } from '../../services/certero.service';
 import { CasoModel } from '../dashboard-llamador/caso.model';
 import * as XLSX from 'xlsx';
 
@@ -49,6 +50,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     private router: Router,
     private fs: FirestoreService,
     private emailSvc: EmailService,
+    private certero: CerteroService,
     private zone: NgZone,
     private cdr: ChangeDetectorRef,
     @Inject(PLATFORM_ID) private platformId: object
@@ -433,20 +435,222 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   emailEnviado: Record<string, boolean> = {};
   emailError: Record<string, string> = {};
 
+  async imprimirCarta(caso: CasoModel): Promise<void> {
+    // Si no hay domicilios cacheados, buscar en Certero antes de imprimir
+    const domiciliosCacheados: any[] = caso.certeroData?.['domicilios'] ?? [];
+    if (domiciliosCacheados.length === 0 && caso.CUIL) {
+      const data = await this.certero.getSumario(caso.CUIL);
+      if (data && !data._noEncontrado) {
+        caso = { ...caso, certeroData: data as any };
+        if (caso.id) this.fs.guardarSumarioCertero(caso.id, data);
+      }
+    }
+    this._generarCartaPDF(caso);
+  }
+
+  private _generarCartaPDF(caso: CasoModel): void {
+    const nombreCompleto = caso.Trabajador || '';
+
+    // ── Parsear nombre y apellido ─────────────────────────────
+    let apellidoRaw: string, primerNombre: string;
+    if (nombreCompleto.includes(',')) {
+      apellidoRaw = nombreCompleto.split(',')[0].trim();
+      primerNombre = nombreCompleto.split(',')[1]?.trim().split(' ')[0] ?? 'Cliente';
+    } else {
+      const partes = nombreCompleto.trim().split(/\s+/);
+      apellidoRaw = partes[0] ?? '';
+      primerNombre = partes[1] ?? partes[0] ?? 'Cliente';
+    }
+    const apellido = apellidoRaw.charAt(0).toUpperCase() + apellidoRaw.slice(1).toLowerCase();
+    primerNombre = primerNombre.charAt(0).toUpperCase() + primerNombre.slice(1).toLowerCase();
+
+    // ── Dirección desde certeroData cacheado ──────────────────
+    const domicilios: any[] = caso.certeroData?.['domicilios'] ?? [];
+    let lineaDireccion = '';
+    let lineaCiudad = '';
+    let lineaProvincia = '';
+    let lineaCP = '';
+    if (domicilios.length > 0) {
+      const d = domicilios[0];
+      const calle = [d.calle, d.altura].filter(Boolean).join(' ');
+      const detalle = [d.piso ? `Piso ${d.piso}` : '', d.depto ? `Dpto ${d.depto}` : ''].filter(Boolean).join(' ');
+      lineaDireccion = detalle ? `${calle}, ${detalle}` : calle;
+      lineaCiudad    = d.localidad  ?? '';
+      lineaProvincia = d.provincia  ?? '';
+      lineaCP        = d.cp         ?? '';
+    }
+
+    import('jspdf').then(({ jsPDF }) => {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const PW = 210, PH = 297;
+      const ML = 22, MR = 22;
+      const CW = PW - ML - MR;
+
+      // ── Franja azul superior (más alta para dar aire) ─────────
+      doc.setFillColor(30, 58, 138);
+      doc.rect(0, 0, PW, 22, 'F');
+      doc.setFillColor(37, 99, 235);
+      doc.rect(0, 22, PW, 2.5, 'F');
+
+      // ── Franja azul inferior ──────────────────────────────────
+      doc.setFillColor(37, 99, 235);
+      doc.rect(0, PH - 16, PW, 2.5, 'F');
+      doc.setFillColor(30, 58, 138);
+      doc.rect(0, PH - 13.5, PW, 13.5, 'F');
+
+      // ── Fecha dentro del encabezado ───────────────────────────
+      const hoy = new Date();
+      const fechaStr = hoy.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(200, 215, 255);
+      doc.text(fechaStr, PW - MR, 14, { align: 'right' });
+
+      // ── Helpers ───────────────────────────────────────────────
+      let y = 32;
+
+      const ln = (txt: string, size: number, bold: boolean, r: number, g: number, b: number, width = CW) => {
+        doc.setFont('helvetica', bold ? 'bold' : 'normal');
+        doc.setFontSize(size);
+        doc.setTextColor(r, g, b);
+        const lines = doc.splitTextToSize(txt, width);
+        doc.text(lines, ML, y);
+        y += lines.length * (size * 0.44) + 2;
+      };
+
+      const sp = (mm: number) => { y += mm; };
+
+      // ── Línea divisoria ───────────────────────────────────────
+      doc.setDrawColor(37, 99, 235);
+      doc.setLineWidth(0.5);
+      doc.line(ML, y, ML + CW, y);
+      sp(8);
+
+      // ── ENCABEZADO: MENSAJE ───────────────────────────────────
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(37, 99, 235);
+      doc.text('MENSAJE', ML, y);
+      y += 6;
+
+      ln(`Hola ${primerNombre}, ¿cómo estás?`, 14, true, 26, 26, 26);
+      sp(6);
+
+      ln('Te escribo por tu accidente de trabajo. Tengo entendido que la aseguradora no evaluó las secuelas de tus lesiones, lo cual es una lástima, ya que es muy probable que haya aspectos positivos para valorar.', 13, false, 50, 50, 50);
+      sp(5);
+
+      ln('Te cuento que en casos como el tuyo —accidentes con baja prolongada— siempre vale la pena hacer una revisión médica.', 13, false, 50, 50, 50);
+      sp(5);
+
+      ln('Yo me dedico a realizar este trámite y no es necesario que te muevas de tu casa, excepto para la evaluación médica.', 13, false, 50, 50, 50);
+      sp(5);
+
+      ln('Tené en cuenta que la ART directamente no informa estas cuestiones.', 13, false, 50, 50, 50);
+      sp(5);
+
+      ln('Me gustaría que me consultes o, al menos, que puedas sacarte las dudas que tengas.', 13, false, 50, 50, 50);
+      sp(5);
+
+      ln('Abajo te dejo mi teléfono para que me mandes un WhatsApp sin compromiso. En dos minutos te digo si tiene o no sentido avanzar.', 13, false, 50, 50, 50);
+
+      // ── Firma ─────────────────────────────────────────────────
+      sp(10);
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.35);
+      doc.line(ML, y, ML + 65, y);
+      sp(6);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(12);
+      doc.setTextColor(110, 110, 110);
+      doc.text('Un saludo,', ML, y);
+      y += 7;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(30, 58, 138);
+      doc.text('Carla Vignale', ML, y);
+
+      // ── BLOQUE DESTINATARIO EN TERCIO INFERIOR ────────────────
+      const FOOTER_Y = PH - 16;
+      const BLOCK_H  = 60;
+      const blockY   = FOOTER_Y - BLOCK_H - 6;
+
+      // Fondo gris suave
+      doc.setFillColor(245, 247, 250);
+      doc.roundedRect(ML - 5, blockY - 6, CW + 10, BLOCK_H + 6, 3, 3, 'F');
+
+      // Barra azul izquierda
+      doc.setFillColor(37, 99, 235);
+      doc.rect(ML - 5, blockY - 6, 4, BLOCK_H + 6, 'F');
+
+      // Etiqueta título
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(37, 99, 235);
+      doc.text('DATOS DEL DESTINATARIO', ML + 3, blockY);
+
+      // Fichas: label pequeño encima, valor grande debajo
+      // Disposición en 2 columnas para los campos cortos
+      let by = blockY + 8;
+      const COL2 = ML + 3 + CW / 2; // inicio columna derecha
+
+      const ficha = (label: string, valor: string, x: number, maxW: number) => {
+        if (!valor) return 0;
+        // Label pequeño azul
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(37, 99, 235);
+        doc.text(label.toUpperCase(), x, by);
+        // Valor más grande oscuro
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(26, 26, 26);
+        const lines = doc.splitTextToSize(valor, maxW);
+        doc.text(lines, x, by + 4.5);
+        return lines.length * 5.5 + 4.5;
+      };
+
+      // Fila 1: Nombre (ancho completo)
+      const h1 = ficha('Nombre y Apellido', `${primerNombre} ${apellido}`, ML + 3, CW - 6);
+      by += h1 + 5;
+
+      // Fila 2: Dirección (ancho completo)
+      const h2 = ficha('Dirección', lineaDireccion, ML + 3, CW - 6);
+      by += h2 + 5;
+
+      // Fila 3: Ciudad | Provincia | CP en tres columnas
+      const tercio = (CW - 6) / 3;
+      ficha('Ciudad',          lineaCiudad,              ML + 3,              tercio - 3);
+      ficha('Provincia',       lineaProvincia,            ML + 3 + tercio,     tercio - 3);
+      ficha('Código Postal',   lineaCP ? `CP ${lineaCP}` : '', ML + 3 + tercio * 2, tercio - 3);
+
+      doc.save(`Carta - ${apellido}.pdf`);
+
+      // Marcar carta como impresa en Firestore
+      if (caso.id) {
+        this.fs.marcarCartaImpresa(caso.id);
+        const idx = this.casosEstado.findIndex(c => c.id === caso.id);
+        if (idx >= 0) this.casosEstado[idx] = { ...this.casosEstado[idx], cartaImpresa: true };
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
   async enviarEmail(caso: CasoModel) {
     const id = caso.id ?? caso.CUIL ?? Math.random().toString();
     this.enviandoEmail[id] = true;
     this.emailError[id] = '';
     this.cdr.detectChanges();
     try {
-      await this.emailSvc.enviarEmailSinContacto(caso, 'ema-ber2011@live.com.ar');
+      const { destinatario } = await this.emailSvc.enviarEmailSinContacto(caso);
       this.emailEnviado[id] = true;
       if (caso.id) {
         await this.fs.marcarEmailEnviado(caso.id);
-        // Actualizar localmente el objeto del caso para que persista
         const idx = this.casosEstado.findIndex(c => c.id === caso.id);
         if (idx >= 0) this.casosEstado[idx] = { ...this.casosEstado[idx], emailEnviado: true };
       }
+      console.log(`Email enviado a: ${destinatario}`);
     } catch (e: any) {
       this.emailError[id] = 'Error al enviar';
       console.error('EmailJS error:', e);

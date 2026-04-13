@@ -6,6 +6,8 @@ import {
   signOut,
   createUserWithEmailAndPassword,
   updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
   Auth,
   UserCredential,
   User
@@ -48,9 +50,13 @@ export class AuthService {
     return this.auth.currentUser?.email === 'bcapeletti@hotmail.com';
   }
 
-  async cambiarPassword(nuevaPassword: string): Promise<void> {
+  async cambiarPassword(nuevaPassword: string, passwordActual?: string): Promise<void> {
     const user = this.auth.currentUser;
     if (!user) throw new Error('No hay usuario autenticado');
+    if (passwordActual && user.email) {
+      const cred = EmailAuthProvider.credential(user.email, passwordActual);
+      await reauthenticateWithCredential(user, cred);
+    }
     await updatePassword(user, nuevaPassword);
   }
 
