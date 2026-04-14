@@ -325,7 +325,6 @@ export class FirestoreService {
 
   async getHistorialCompleto(): Promise<CasoModel[]> {
     const ref = collection(this.db, COL_CASOS);
-    // Traer procesados=true Y también docs con estado asignado (por si procesado no se guardó bien)
     const [snap1, snap2] = await Promise.all([
       getDocs(query(ref, where('procesado', '==', true))),
       getDocs(query(ref, where('estado', '!=', ''))),
@@ -334,7 +333,6 @@ export class FirestoreService {
     for (const snap of [snap1, snap2]) {
       for (const d of snap.docs) {
         const data = d.data() as any;
-        // Solo incluir si tiene estado definido y procesadoPor (fue trabajado por alguien)
         if (data.estado && data.procesadoPor) {
           mapaIds.set(d.id, { id: d.id, ...data } as CasoModel);
         }
@@ -346,6 +344,40 @@ export class FirestoreService {
       const tb = b.procesadoTimestamp ?? '';
       return tb > ta ? 1 : -1;
     });
+  }
+
+  /** Listener en tiempo real del historial completo (admin). Devuelve unsubscribe. */
+  escucharHistorialCompleto(callback: (casos: CasoModel[]) => void): () => void {
+    const ref = collection(this.db, COL_CASOS);
+    const mapaIds = new Map<string, CasoModel>();
+
+    const merge = () => {
+      const casos = Array.from(mapaIds.values())
+        .filter(c => c.estado && c.procesadoPor)
+        .sort((a, b) => {
+          const ta = a.procesadoTimestamp ?? '';
+          const tb = b.procesadoTimestamp ?? '';
+          return tb > ta ? 1 : -1;
+        });
+      callback(casos);
+    };
+
+    const unsub1 = onSnapshot(query(ref, where('procesado', '==', true)), snap => {
+      snap.docs.forEach(d => mapaIds.set(d.id, { id: d.id, ...d.data() } as CasoModel));
+      merge();
+    });
+
+    const unsub2 = onSnapshot(query(ref, where('estado', '!=', '')), snap => {
+      snap.docs.forEach(d => {
+        const data = d.data() as any;
+        if (data.estado && data.procesadoPor) {
+          mapaIds.set(d.id, { id: d.id, ...data } as CasoModel);
+        }
+      });
+      merge();
+    });
+
+    return () => { unsub1(); unsub2(); };
   }
 
   /**

@@ -39,6 +39,9 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   private unsubNotif: (() => void) | null = null;
   private unsubPresencia: (() => void) | null = null;
   private unsubNoticias: (() => void) | null = null;
+  private unsubHistorial: (() => void) | null = null;
+  private historialInterval: any = null;
+  private colaInterval: any = null;
   private adminInitMs = Date.now();
   private prevNotifCount = 0;
 
@@ -75,7 +78,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
 
   // ── Historial ─────────────────────────────────────────────
   historial: CasoModel[] = [];
-  cargandoHistorial = false;
+  cargandoHistorial = true;
   historialFiltroLlamador = '';
   historialFiltroEstado = '';
 
@@ -125,7 +128,19 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     if (!isPlatformBrowser(this.platformId)) return;
     await this.cargarEstadisticas();
     this.fs.getCantidadEnCola().then(n => this.zone.run(() => { this.casosEnCola = n; }));
-    this.fs.getHistorialCompleto().then(h => this.zone.run(() => { this.historial = h; }));
+    this.colaInterval = setInterval(() => {
+      this.fs.getCantidadEnCola().then(n => this.zone.run(() => { this.casosEnCola = n; this.cdr.detectChanges(); }));
+    }, 500);
+
+    // Carga inicial
+    this.fs.getHistorialCompleto().then(h => {
+      this.zone.run(() => { this.historial = h; this.cargandoHistorial = false; this.cdr.detectChanges(); });
+    });
+    // Polling cada 500ms
+    this.historialInterval = setInterval(async () => {
+      const h = await this.fs.getHistorialCompleto();
+      this.zone.run(() => { this.historial = h; this.cdr.detectChanges(); });
+    }, 500);
     this.unsubNotif = this.fs.escucharNotificacionesAcepto(this.adminInitMs, notifs => {
       this.zone.run(() => {
         if (notifs.length > this.prevNotifCount) {
@@ -154,6 +169,9 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.unsubNotif?.();
     this.unsubPresencia?.();
     this.unsubNoticias?.();
+    this.unsubHistorial?.();
+    if (this.historialInterval) clearInterval(this.historialInterval);
+    if (this.colaInterval) clearInterval(this.colaInterval);
   }
 
   async publicarNoticia(): Promise<void> {
@@ -358,6 +376,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
 
   get historialFiltrado(): CasoModel[] {
     return this.historial.filter(c => {
+      if (!c.Trabajador) return false;
       const okLlamador = !this.historialFiltroLlamador || c.procesadoPor === this.historialFiltroLlamador;
       const okEstado = !this.historialFiltroEstado
         || (this.historialFiltroEstado === 'interesado' ? this.esPendiente(c.estado) : c.estado === this.historialFiltroEstado);
@@ -375,7 +394,9 @@ export class DashboardAdmin implements OnInit, OnDestroy {
       this.cargandoHistorial = true;
       this.cdr.detectChanges();
       try {
-        this.historial = await this.fs.getHistorialCompleto();
+        // El listener en tiempo real (escucharHistorialCompleto) ya actualiza this.historial
+        // automáticamente. Solo esperamos brevemente si todavía no llegaron datos.
+        await new Promise(r => setTimeout(r, 800));
       } catch (e) {
         console.error('Error cargando historial:', e);
       } finally {
@@ -640,20 +661,28 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   async enviarEmail(caso: CasoModel) {
     const id = caso.id ?? caso.CUIL ?? Math.random().toString();
     this.enviandoEmail[id] = true;
-    this.emailError[id] = '';
     this.cdr.detectChanges();
     try {
-      const { destinatario } = await this.emailSvc.enviarEmailSinContacto(caso);
+      // Si no hay certeroData (o no tiene emails), buscar en la API y guardar
+      const emailsCacheados: any[] = caso.certeroData?.['emails'] ?? [];
+      if (emailsCacheados.length === 0 && caso.CUIL) {
+        const data = await this.certero.getSumario(caso.CUIL);
+        if (data && !data._noEncontrado) {
+          caso = { ...caso, certeroData: data as any };
+          if (caso.id) this.fs.guardarSumarioCertero(caso.id, data);
+        }
+      }
+      const { destinatario } = this.emailSvc.abrirMailto(caso);
       this.emailEnviado[id] = true;
       if (caso.id) {
         await this.fs.marcarEmailEnviado(caso.id);
         const idx = this.casosEstado.findIndex(c => c.id === caso.id);
         if (idx >= 0) this.casosEstado[idx] = { ...this.casosEstado[idx], emailEnviado: true };
       }
-      console.log(`Email enviado a: ${destinatario}`);
+      console.log(`Mailto abierto para: ${destinatario}`);
     } catch (e: any) {
-      this.emailError[id] = 'Error al enviar';
-      console.error('EmailJS error:', e);
+      this.emailError[id] = 'Error al abrir mail';
+      console.error('Mailto error:', e);
     } finally {
       this.enviandoEmail[id] = false;
       this.cdr.detectChanges();

@@ -1,7 +1,7 @@
 <div class="relative min-h-screen bg-gray-100 flex flex-col">
 
   <!-- Blob fondo -->
-  <div class="absolute inset-0 z-0 pointer-events-none">
+  <div class="fixed inset-0 z-0 pointer-events-none">
     <svg viewBox="0 0 1440 800" preserveAspectRatio="xMidYMid slice"
          xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
       <defs>
@@ -663,7 +663,7 @@
                       </td>
                       <td class="px-4 py-3 text-gray-600">{{ c.ASGINADO || c.procesadoPor }}</td>
                       <td class="px-4 py-3 text-gray-400 text-xs">
-                        {{ c.procesadoTimestamp ? (c.procesadoTimestamp | date:'dd/MM/yy HH:mm') : '—' }}
+                        {{ c.procesadoTimestamp?.toDate ? (c.procesadoTimestamp.toDate() | date:'dd/MM/yy HH:mm') : '—' }}
                       </td>
                     </tr>
                   }

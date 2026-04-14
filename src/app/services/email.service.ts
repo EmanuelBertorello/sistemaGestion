@@ -1,57 +1,28 @@
 import { Injectable } from '@angular/core';
-import emailjs from '@emailjs/browser';
-import { environment } from '../../environments/environment';
 import { CasoModel } from '../comp/dashboard-llamador/caso.model';
-
-// ─── MODO TESTING ─────────────────────────────────────────────────────────────
-// Mientras TEST_MODE = true, todos los emails se redirigen a TEST_EMAIL
-// independientemente del destinatario real.
-// Cambiá TEST_MODE a false cuando quieras enviar a los destinatarios reales.
-const TEST_MODE  = true;
-const TEST_EMAIL = 'ema-ber2011@live.com.ar';
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: 'root' })
 export class EmailService {
 
-  private inicializado = false;
-
-  private init() {
-    if (!this.inicializado) {
-      emailjs.init(environment.emailjs.publicKey);
-      this.inicializado = true;
-    }
-  }
-
-  /**
-   * Extrae el primer email del certeroData cacheado en el caso.
-   * Si no hay ninguno, retorna null.
-   */
   getEmailDelCaso(caso: CasoModel): string | null {
     const emails: any[] = caso.certeroData?.['emails'] ?? [];
     const primero = emails.find(e => e.direccion?.includes('@'));
     return primero?.direccion ?? null;
   }
 
-  async enviarEmailSinContacto(caso: CasoModel): Promise<{ destinatario: string }> {
-    this.init();
-
-    // Destinatario real desde certeroData, fallback a TEST_EMAIL si no hay
-    const emailReal = this.getEmailDelCaso(caso) ?? TEST_EMAIL;
-    const destinatario = TEST_MODE ? TEST_EMAIL : emailReal;
+  abrirMailto(caso: CasoModel): { destinatario: string } {
+    const emailReal = this.getEmailDelCaso(caso) ?? '';
+    const destinatario = emailReal;
 
     const nombreCompleto = caso.Trabajador || 'usted';
-    let apellidoRaw = nombreCompleto.includes(',')
-      ? nombreCompleto.split(',')[0].trim()
-      : nombreCompleto.split(' ')[0].trim();
-    const apellido = apellidoRaw.charAt(0).toUpperCase() + apellidoRaw.slice(1).toLowerCase();
-
     let primerNombre = nombreCompleto.includes(',')
       ? nombreCompleto.split(',')[1]?.trim().split(' ')[0] ?? 'Cliente'
       : nombreCompleto.trim().split(/\s+/)[1] ?? nombreCompleto.trim().split(/\s+/)[0] ?? 'Cliente';
     primerNombre = primerNombre.charAt(0).toUpperCase() + primerNombre.slice(1).toLowerCase();
 
-    const mensaje =
+    const asunto = encodeURIComponent('Tu accidente de trabajo — revisión médica sin cargo');
+
+    const cuerpo = encodeURIComponent(
 `Hola ${primerNombre}, ¿cómo estás?
 
 Te escribo por tu accidente de trabajo. Tengo entendido que la aseguradora no evaluó las secuelas de tus lesiones, lo cual es una lástima, ya que es muy probable que haya aspectos positivos para valorar.
@@ -67,18 +38,11 @@ Me gustaría que me consultes o, al menos, que puedas sacarte las dudas que teng
 Abajo te dejo mi teléfono para que me mandes un WhatsApp sin compromiso. En dos minutos te digo si tiene o no sentido avanzar.
 
 Un saludo,
-Carla Vignale`;
-
-    await emailjs.send(
-      environment.emailjs.serviceId,
-      environment.emailjs.templateId,
-      {
-        to_email:   destinatario,
-        to_name:    `${primerNombre} ${apellido}`,
-        subject:    'Tu accidente de trabajo — revisión médica sin cargo',
-        message:    mensaje,
-      }
+Carla Vignale
+WhatsApp: +54 9 3416 05-5454`
     );
+
+    window.location.href = `mailto:${destinatario}?subject=${asunto}&body=${cuerpo}`;
 
     return { destinatario };
   }
