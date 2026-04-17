@@ -60,6 +60,7 @@ const COL_USUARIOS = 'usuarios';
 const COL_NOTIFICACIONES = 'notificaciones';
 const COL_PRESENCIA = 'presencia';
 const COL_NOTICIAS = 'noticias';
+const COL_REGLAS = 'reglas_asignacion';
 
 @Injectable({ providedIn: 'root' })
 export class FirestoreService {
@@ -105,11 +106,37 @@ export class FirestoreService {
   /** Elimina todos los casos no procesados donde venta = 'si' (cualquier casing) */
   async eliminarVentaSi(onProgress?: (procesados: number) => void): Promise<{ eliminados: number }> {
     const ref = collection(this.db, COL_CASOS);
-    const snap = await getDocs(query(ref, where('procesado', '==', false)));
+    // Traer TODOS los docs para atrapar también los que tienen procesado=undefined/null
+    const snap = await getDocs(ref);
     const aEliminar = snap.docs.filter(d => {
       const data = d.data();
+      if (data['procesado'] === true) return false; // ya procesados → no tocar
       const val = (data['venta'] ?? data['Venta'] ?? data['VENTA'] ?? '').toString().toLowerCase().trim();
       return val === 'si' || val === 'sí';
+    }).map(d => d.id);
+
+    let eliminados = 0;
+    const chunkSize = 499;
+    for (let i = 0; i < aEliminar.length; i += chunkSize) {
+      const chunk = aEliminar.slice(i, i + chunkSize);
+      const batch = writeBatch(this.db);
+      for (const id of chunk) batch.delete(doc(this.db, COL_CASOS, id));
+      await batch.commit();
+      eliminados += chunk.length;
+      onProgress?.(eliminados);
+    }
+    return { eliminados };
+  }
+
+  /** Elimina todos los casos no procesados donde el campo venta está vacío/ausente */
+  async eliminarSinVenta(onProgress?: (procesados: number) => void): Promise<{ eliminados: number }> {
+    const ref = collection(this.db, COL_CASOS);
+    const snap = await getDocs(ref);
+    const aEliminar = snap.docs.filter(d => {
+      const data = d.data();
+      if (data['procesado'] === true) return false;
+      const val = (data['venta'] ?? data['Venta'] ?? data['VENTA'] ?? '').toString().toLowerCase().trim();
+      return val === ''; // sin valor asignado
     }).map(d => d.id);
 
     let eliminados = 0;
@@ -191,26 +218,30 @@ export class FirestoreService {
     return { eliminados };
   }
 
-  async marcarProcesado(id: string, estado: EstadoCaso, procesadoPor: string, asignado: string = '', caso?: any): Promise<void> {
+  async marcarProcesado(id: string, estado: EstadoCaso, procesadoPor: string, asignado: string = '', caso?: any, comentario = ''): Promise<void> {
     const ts = new Date().toISOString();
+    const entrada: any = { estado, timestamp: ts, por: procesadoPor, apodo: asignado || procesadoPor };
+    if (comentario) entrada.comentario = comentario;
     await updateDoc(doc(this.db, COL_CASOS, id), {
       procesado: true,
       estado,
       procesadoPor,
       ASGINADO: asignado || procesadoPor,
       procesadoTimestamp: serverTimestamp(),
-      historialEstados: arrayUnion({ estado, timestamp: ts, por: procesadoPor, apodo: asignado || procesadoPor })
+      historialEstados: arrayUnion(entrada)
     });
     if (estado === 'acepto' && caso) {
       await this.crearNotificacionAcepto(id, caso, asignado || procesadoPor);
     }
   }
 
-  async cambiarEstadoCaso(id: string, nuevoEstado: EstadoCaso, email: string, apodo: string, caso?: any): Promise<void> {
+  async cambiarEstadoCaso(id: string, nuevoEstado: EstadoCaso, email: string, apodo: string, caso?: any, comentario = ''): Promise<void> {
     const ts = new Date().toISOString();
+    const entrada: any = { estado: nuevoEstado, timestamp: ts, por: email, apodo };
+    if (comentario) entrada.comentario = comentario;
     await updateDoc(doc(this.db, COL_CASOS, id), {
       estado: nuevoEstado,
-      historialEstados: arrayUnion({ estado: nuevoEstado, timestamp: ts, por: email, apodo })
+      historialEstados: arrayUnion(entrada)
     });
     if (nuevoEstado === 'acepto' && caso) {
       await this.crearNotificacionAcepto(id, caso, apodo);
@@ -439,6 +470,14 @@ export class FirestoreService {
     await updateDoc(doc(this.db, COL_USUARIOS, uid), { apodo });
   }
 
+  async actualizarEmailUsuario(uid: string, email: string): Promise<void> {
+    await updateDoc(doc(this.db, COL_USUARIOS, uid), { email });
+  }
+
+  async eliminarUsuarioFirestore(uid: string): Promise<void> {
+    await deleteDoc(doc(this.db, COL_USUARIOS, uid));
+  }
+
   // ─── PRESENCIA ───────────────────────────────────────────
 
   private presenciaKey(email: string): string {
@@ -483,12 +522,144 @@ export class FirestoreService {
     await updateDoc(doc(this.db, COL_CASOS, id), { cartaImpresa: true });
   }
 
+  async registrarRecontacto(id: string, email: string, apodo: string, comentario: string): Promise<void> {
+    const ts = new Date().toISOString();
+    await updateDoc(doc(this.db, COL_CASOS, id), {
+      recontactos: arrayUnion({ timestamp: ts, comentario, por: email, apodo })
+    });
+  }
+
+  async guardarSeguimiento(
+    id: string,
+    entry: { tipo: string; fecha: string; hora: string; intencion: string; nota: string; por: string; apodo: string },
+    proximaAccion: { tipo: string; fecha: string; hora: string },
+    intencion: string
+  ): Promise<void> {
+    const seg = { ...entry, timestamp: new Date().toISOString() };
+    await updateDoc(doc(this.db, COL_CASOS, id), {
+      seguimientos: arrayUnion(seg),
+      proximaAccion,
+      intencion,
+    });
+  }
+
   async guardarExpediente(id: string, nroExpediente: string): Promise<void> {
     await updateDoc(doc(this.db, COL_CASOS, id), { nroExpediente });
   }
 
   async guardarSumarioCertero(id: string, sumario: object): Promise<void> {
     await updateDoc(doc(this.db, COL_CASOS, id), { certeroData: sumario });
+  }
+
+  // ── Reglas de asignación (Cola Personal) ─────────────────
+
+  async getReglasCola(): Promise<Array<{ id: string; localidad: string; apodo: string }>> {
+    const snap = await getDocs(collection(this.db, COL_REGLAS));
+    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+  }
+
+  async agregarReglaCola(localidad: string, apodo: string): Promise<void> {
+    await addDoc(collection(this.db, COL_REGLAS), { localidad: localidad.trim(), apodo: apodo.trim() });
+  }
+
+  async eliminarReglaCola(id: string): Promise<void> {
+    await deleteDoc(doc(this.db, COL_REGLAS, id));
+  }
+
+  /** Retorna cuántos casos no procesados tiene cada apodo en su cola personal */
+  async getEstadoColas(): Promise<Array<{ apodo: string; cantidad: number }>> {
+    const BASURA = new Set(['asginado', 'asignado', 'assigned', 'apodo', 'llamador', 'nombre']);
+
+    // Construir mapa email → apodo desde la colección usuarios
+    const usuariosSnap = await getDocs(collection(this.db, COL_USUARIOS));
+    const emailAApodo = new Map<string, string>(); // email.toLowerCase() → apodo
+    for (const d of usuariosSnap.docs) {
+      const u = d.data() as any;
+      const email = (u.email ?? '').toLowerCase();
+      const apodo = (u.apodo ?? '').trim();
+      if (email) emailAApodo.set(email, apodo || '');
+    }
+
+    const ref = collection(this.db, COL_CASOS);
+    const snap = await getDocs(query(ref, where('procesado', '==', false)));
+
+    // Agrupar normalizando: si ASGINADO es un email → resolver al apodo
+    const mapaLower = new Map<string, { display: string; cantidad: number }>();
+    for (const d of snap.docs) {
+      let raw = (d.data()['ASGINADO'] ?? '').toString().trim();
+      if (!raw) continue;
+      if (BASURA.has(raw.toLowerCase())) continue;
+
+      // Si parece un email, intentar resolverlo al apodo
+      if (raw.includes('@')) {
+        const apodoResuelto = emailAApodo.get(raw.toLowerCase());
+        if (apodoResuelto) raw = apodoResuelto;
+        // Si el usuario no tiene apodo configurado, usar la parte antes del @
+        else raw = raw.split('@')[0];
+      }
+
+      const key = raw.toLowerCase();
+      if (mapaLower.has(key)) {
+        mapaLower.get(key)!.cantidad++;
+      } else {
+        mapaLower.set(key, { display: raw, cantidad: 1 });
+      }
+    }
+    return Array.from(mapaLower.values())
+      .map(v => ({ apodo: v.display, cantidad: v.cantidad }))
+      .sort((a, b) => b.cantidad - a.cantidad);
+  }
+
+  /** Aplica las reglas a los docs sin ASGINADO basándose en Localidad_Ocurrencia */
+  async aplicarReglasCola(onProgress?: (n: number) => void): Promise<{ asignados: number }> {
+    const [reglas, snap] = await Promise.all([
+      this.getReglasCola(),
+      getDocs(query(collection(this.db, COL_CASOS), where('procesado', '==', false)))
+    ]);
+    const candidatos = snap.docs.filter(d => !d.data()['ASGINADO']);
+    let asignados = 0;
+    const chunkSize = 499;
+    const aActualizar: Array<{ id: string; apodo: string }> = [];
+
+    for (const d of candidatos) {
+      const localidad = (d.data()['Localidad_Ocurrencia'] ?? '').toString().trim().toLowerCase();
+      const regla = reglas.find(r => localidad.includes(r.localidad.toLowerCase()));
+      if (regla) aActualizar.push({ id: d.id, apodo: regla.apodo });
+    }
+
+    for (let i = 0; i < aActualizar.length; i += chunkSize) {
+      const chunk = aActualizar.slice(i, i + chunkSize);
+      const batch = writeBatch(this.db);
+      for (const { id, apodo } of chunk) batch.update(doc(this.db, COL_CASOS, id), { ASGINADO: apodo });
+      await batch.commit();
+      asignados += chunk.length;
+      onProgress?.(asignados);
+    }
+    return { asignados };
+  }
+
+  // ── Config por llamador ───────────────────────────────────
+
+  async getConfigLlamador(apodo: string): Promise<{ limitePendientes: number }> {
+    const snap = await getDocs(
+      query(collection(this.db, 'config_llamadores'), where('apodo', '==', apodo))
+    );
+    if (!snap.empty) {
+      const data = snap.docs[0].data() as any;
+      return { limitePendientes: data.limitePendientes ?? 35 };
+    }
+    return { limitePendientes: 35 };
+  }
+
+  async setConfigLlamador(apodo: string, limitePendientes: number): Promise<void> {
+    const snap = await getDocs(
+      query(collection(this.db, 'config_llamadores'), where('apodo', '==', apodo))
+    );
+    if (!snap.empty) {
+      await updateDoc(snap.docs[0].ref, { limitePendientes });
+    } else {
+      await addDoc(collection(this.db, 'config_llamadores'), { apodo, limitePendientes });
+    }
   }
 
   async getCantidadEnCola(): Promise<number> {

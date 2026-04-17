@@ -22,9 +22,33 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   mostrarModalExpediente = false;
   expedienteInput = '';
   expedienteError = '';
+
+  // Modal comentario al cambiar estado
+  mostrarModalComentario = false;
+  comentarioInput = '';
+  pendingCambioEstado: { caso: CasoModel; estado: EstadoCaso } | null = null;
+  pendingEstadoCasoActual: EstadoCaso | null = null; // para el flujo del caso actual
+  comentarioCasoActual = '';
+
+  // Modal seguimiento (pendiente desde caso actual o historial)
+  mostrarModalSeguimiento = false;
+  casoSeguimiento: CasoModel | null = null; // null = caso actual
+  sgIntencion = '';
+  sgNota = '';
+  sgTipo = 'Llamar';
+  sgFecha = '';
+  sgHora = '';
+  sgError = '';
+  sgGuardando = false;
+
+  // Panel derecho en tab seguimiento
+  casoPanelDerecho: CasoModel | null = null;
+
+  // Búsqueda en seguimiento
+  busquedaSeguimiento = '';
   buscando = false;
   cargandoInicial = true;
-  seccionActiva: 'caso' | 'acepto' | 'pendientes' | 'historial' = 'caso';
+  seccionActiva: 'caso' | 'acepto' | 'pendientes' | 'historial' | 'seguimiento' = 'caso';
   casoModal: CasoModel | null = null;
   mostrarModalMatricula = false;
   mostrarModalPerfil = false;
@@ -35,7 +59,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   perfilMensaje = '';
   perfilError = '';
 
-  readonly LIMITE_PENDIENTES = 35;
+  limitePendientes = 35; // se sobreescribe desde Firestore según el apodo
 
   matriculas = [
     { label: 'DNI',                  archivo: 'assets/matriculas/dni.pdf' },
@@ -104,6 +128,10 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       this.firestoreService.asegurarUsuarioRegistrado(uid, email);
       this.apodoUsuario = await this.firestoreService.getApodoPorEmail(email);
 
+      // Cargar config personal (límite de pendientes, etc.)
+      const config = await this.firestoreService.getConfigLlamador(this.apodoUsuario);
+      this.limitePendientes = config.limitePendientes;
+
       // Registrar presencia y mantener heartbeat cada 30s
       await this.firestoreService.registrarPresencia(email, this.apodoUsuario);
       this.heartbeatInterval = setInterval(() => {
@@ -136,7 +164,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
 
   get pendientesCount(): number { return this.pendientes.length; }
 
-  get limitePendientesAlcanzado(): boolean { return this.pendientesCount >= this.LIMITE_PENDIENTES; }
+  get limitePendientesAlcanzado(): boolean { return this.pendientesCount >= this.limitePendientes; }
 
   get aceptos(): CasoModel[] {
     return this.historial.filter(c => c.estado === 'acepto');
@@ -321,6 +349,10 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       this.mostrarModalExpediente = true;
       return;
     }
+    if (estado === 'pendiente') {
+      this.abrirModalSeguimiento(null); // null = caso actual
+      return;
+    }
     this.estadoActivo = estado;
     this.mostrarDescartarOpciones = false;
   }
@@ -330,13 +362,26 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       this.expedienteError = 'El número de expediente es obligatorio.';
       return;
     }
-    this.estadoActivo = 'acepto';
-    this.mostrarDescartarOpciones = false;
     this.mostrarModalExpediente = false;
-    // Guardar expediente en Firestore si ya hay un caso asignado
-    if (this.caso?.id) {
-      this.firestoreService.guardarExpediente(this.caso.id, this.expedienteInput.trim());
-      this.caso = { ...this.caso, nroExpediente: this.expedienteInput.trim() };
+
+    if (this.pendingCambioEstado) {
+      // Viene del historial: guardar expediente y abrir modal de comentario
+      const { caso } = this.pendingCambioEstado;
+      if (caso.id) {
+        this.firestoreService.guardarExpediente(caso.id, this.expedienteInput.trim());
+        const idx = this.historial.findIndex(c => c.id === caso.id);
+        if (idx >= 0) this.historial[idx] = { ...this.historial[idx], nroExpediente: this.expedienteInput.trim() };
+      }
+      this.comentarioInput = '';
+      this.mostrarModalComentario = true;
+    } else {
+      // Viene del caso actual
+      this.estadoActivo = 'acepto';
+      this.mostrarDescartarOpciones = false;
+      if (this.caso?.id) {
+        this.firestoreService.guardarExpediente(this.caso.id, this.expedienteInput.trim());
+        this.caso = { ...this.caso, nroExpediente: this.expedienteInput.trim() };
+      }
     }
   }
 
@@ -344,6 +389,12 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     this.mostrarModalExpediente = false;
     this.expedienteInput = '';
     this.expedienteError = '';
+    if (this.pendingCambioEstado) {
+      // Vino del historial: resetear el select visualmente
+      this.pendingCambioEstado = null;
+      this.historial = [...this.historial];
+      this.cdr.detectChanges();
+    }
   }
 
   abrirDescartar(): void {
@@ -356,7 +407,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     this.mostrarDescartarOpciones = false;
   }
 
-  setSeccion(seccion: 'caso' | 'acepto' | 'pendientes' | 'historial'): void {
+  setSeccion(seccion: 'caso' | 'acepto' | 'pendientes' | 'historial' | 'seguimiento'): void {
     this.seccionActiva = seccion;
   }
 
@@ -368,7 +419,261 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     this.filtroDiag = '';
   }
 
-  async cambiarEstadoCaso(caso: CasoModel, nuevoEstado: EstadoCaso): Promise<void> {
+  // ── Helpers seguimiento ────────────────────────────────────
+  nSeguimientos(caso: CasoModel): number {
+    return (caso.seguimientos?.length ?? 0) + (caso.recontactos?.length ?? 0);
+  }
+
+  primerCelular(caso: CasoModel): { codigoArea: string; numero: string } | null {
+    const cels: any[] = caso.certeroData?.['celulares'] ?? [];
+    return cels[0] ?? null;
+  }
+
+  primerEmail(caso: CasoModel): string | null {
+    const emails: any[] = caso.certeroData?.['emails'] ?? [];
+    return emails[0]?.direccion ?? null;
+  }
+
+  abrirWhatsappCaso(caso: CasoModel): void {
+    const cel = this.primerCelular(caso);
+    if (!cel) return;
+    const tel = (cel.codigoArea + cel.numero).replace(/\D/g, '');
+    window.open(`https://wa.me/54${tel}`, 'wa_llamador');
+  }
+
+  ultimoComentario(caso: CasoModel): string {
+    const segs = caso.seguimientos;
+    if (segs && segs.length > 0) return segs[segs.length - 1].nota || '—';
+    const recons = caso.recontactos;
+    if (recons && recons.length > 0) return recons[recons.length - 1].comentario || '—';
+    return '—';
+  }
+
+  ultimoContactoTs(caso: CasoModel): string {
+    const segs = caso.seguimientos ?? [];
+    const recons = caso.recontactos ?? [];
+    const all = [...segs, ...recons].sort((a, b) =>
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    if (all.length === 0) return '—';
+    const d = new Date(all[0].timestamp);
+    return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+      + ' · ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  proximaAccionLabel(caso: CasoModel): string {
+    const pa = caso.proximaAccion;
+    if (!pa?.fecha) return 'Primer contacto';
+    const fecha = new Date(pa.fecha + 'T00:00:00');
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const diff = fecha.getTime() - hoy.getTime();
+    if (diff <= 0) return `${pa.tipo} HOY`;
+    if (diff <= 86_400_000) return `${pa.tipo} mañana ${pa.hora}`;
+    return `${pa.tipo} ${fecha.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} ${pa.hora}`;
+  }
+
+  esCasoUrgente(caso: CasoModel): boolean {
+    const pa = caso.proximaAccion;
+    if (!pa?.fecha) return false;
+    const fecha = new Date(pa.fecha + 'T00:00:00');
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    return fecha <= hoy;
+  }
+
+  get vencenHoy(): number {
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    return this.seguimiento.filter(c => {
+      const pa = c.proximaAccion;
+      if (!pa?.fecha) return false;
+      return new Date(pa.fecha + 'T00:00:00') <= hoy;
+    }).length;
+  }
+
+  get sinContacto48h(): number {
+    const limite = Date.now() - 48 * 3600_000;
+    return this.seguimiento.filter(c => {
+      const segs = c.seguimientos ?? [];
+      const recons = c.recontactos ?? [];
+      const all = [...segs, ...recons];
+      if (all.length === 0) return false;
+      const ultimo = Math.max(...all.map(x => new Date(x.timestamp).getTime()));
+      return ultimo < limite;
+    }).length;
+  }
+
+  get seguimientoOrdenado(): CasoModel[] {
+    const q = this.busquedaSeguimiento.trim().toLowerCase();
+    const filtrado = q
+      ? this.seguimiento.filter(c => (c.Trabajador || '').toLowerCase().includes(q))
+      : this.seguimiento;
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    return [...filtrado].sort((a, b) => {
+      const prioA = this.calcPrioridad(a, hoy);
+      const prioB = this.calcPrioridad(b, hoy);
+      if (prioA !== prioB) return prioA - prioB;
+      return Number(b.Dias_ILT ?? 0) - Number(a.Dias_ILT ?? 0);
+    });
+  }
+
+  private calcPrioridad(c: CasoModel, hoy: Date): number {
+    const pa = c.proximaAccion;
+    if (!pa?.fecha) return 1;
+    const f = new Date(pa.fecha + 'T00:00:00');
+    return f <= hoy ? 0 : 2;
+  }
+
+  seleccionarPanel(caso: CasoModel | null): void {
+    this.casoPanelDerecho = caso;
+    if (caso) {
+      this.sgIntencion = caso.intencion || '';
+      this.sgNota = '';
+      this.sgTipo = caso.proximaAccion?.tipo || 'Llamar';
+      this.sgFecha = this.fechaHoyISO();
+      this.sgHora = caso.proximaAccion?.hora || '10:00';
+      this.sgError = '';
+    }
+  }
+
+  fechaHoyISO(): string {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  abrirModalSeguimiento(caso: CasoModel | null): void {
+    this.casoSeguimiento = caso;
+    this.sgIntencion = caso?.intencion || '';
+    this.sgNota = '';
+    this.sgTipo = caso?.proximaAccion?.tipo || 'Llamar';
+    this.sgFecha = this.fechaHoyISO();
+    this.sgHora = caso?.proximaAccion?.hora || '10:00';
+    this.sgError = '';
+    this.mostrarModalSeguimiento = true;
+  }
+
+  cancelarSeguimiento(): void {
+    this.mostrarModalSeguimiento = false;
+    this.casoSeguimiento = null;
+    this.sgError = '';
+    this.historial = [...this.historial]; // reset visual select
+    this.cdr.detectChanges();
+  }
+
+  async guardarSeguimientoPanel(): Promise<void> {
+    await this._guardarSeguimiento(this.casoPanelDerecho);
+  }
+
+  async guardarSeguimientoModal(): Promise<void> {
+    await this._guardarSeguimiento(this.casoSeguimiento);
+    this.mostrarModalSeguimiento = false;
+    this.casoSeguimiento = null;
+  }
+
+  private async _guardarSeguimiento(caso: CasoModel | null): Promise<void> {
+    if (!this.sgFecha || !this.sgHora) {
+      this.sgError = 'La próxima acción es obligatoria.';
+      return;
+    }
+    this.sgGuardando = true;
+    this.sgError = '';
+    const email = this.auth.getCurrentEmail();
+    const proximaAccion = { tipo: this.sgTipo, fecha: this.sgFecha, hora: this.sgHora };
+    const entry = {
+      tipo: this.sgTipo, fecha: this.sgFecha, hora: this.sgHora,
+      intencion: this.sgIntencion, nota: this.sgNota.trim(),
+      por: email, apodo: this.apodoUsuario
+    };
+
+    if (caso?.id) {
+      // Caso del historial / panel
+      await this.firestoreService.guardarSeguimiento(caso.id, entry, proximaAccion, this.sgIntencion);
+      if (caso.estado !== 'pendiente') {
+        await this.firestoreService.cambiarEstadoCaso(caso.id, 'pendiente', email, this.apodoUsuario, caso);
+      }
+      const nuevoSeg = { ...entry, timestamp: new Date().toISOString() };
+      const patch = {
+        ...caso,
+        estado: 'pendiente' as EstadoCaso,
+        seguimientos: [...(caso.seguimientos ?? []), nuevoSeg],
+        proximaAccion, intencion: this.sgIntencion
+      };
+      const idx = this.historial.findIndex(c => c.id === caso.id);
+      if (idx >= 0) this.historial[idx] = patch;
+      if (this.casoPanelDerecho?.id === caso.id) this.casoPanelDerecho = patch;
+    } else {
+      // Caso actual (nuevo)
+      this.estadoActivo = 'pendiente';
+      this.comentarioCasoActual = this.sgNota.trim();
+      this.mostrarDescartarOpciones = false;
+      if (this.caso?.id) {
+        await this.firestoreService.guardarSeguimiento(this.caso.id, entry, proximaAccion, this.sgIntencion);
+        this.caso = {
+          ...this.caso,
+          seguimientos: [...(this.caso.seguimientos ?? []), { ...entry, timestamp: new Date().toISOString() }],
+          proximaAccion, intencion: this.sgIntencion
+        };
+      }
+    }
+
+    this.sgNota = '';
+    this.sgFecha = this.fechaHoyISO();
+    this.sgGuardando = false;
+    this.cdr.detectChanges();
+  }
+
+  // ── Abre el modal de comentario antes de cambiar el estado ──
+  iniciarCambioEstado(caso: CasoModel, nuevoEstado: EstadoCaso): void {
+    if (!caso.id || !nuevoEstado) return;
+
+    // Acepto: pedir expediente primero
+    if (nuevoEstado === 'acepto') {
+      this.pendingCambioEstado = { caso, estado: nuevoEstado };
+      this.expedienteInput = '';
+      this.expedienteError = '';
+      this.mostrarModalExpediente = true;
+      return;
+    }
+
+    // Pendiente: abrir modal de seguimiento
+    if (nuevoEstado === 'pendiente') {
+      this.abrirModalSeguimiento(caso);
+      return;
+    }
+
+    // No interesado / Sin contacto / Con abogado: sin restricciones, solo comentario
+    this.pendingCambioEstado = { caso, estado: nuevoEstado };
+    this.comentarioInput = '';
+    this.mostrarModalComentario = true;
+  }
+
+  async confirmarCambioEstado(): Promise<void> {
+    this.mostrarModalComentario = false;
+
+    if (this.pendingEstadoCasoActual) {
+      // Flujo caso actual: solo setear estado y guardar comentario
+      this.estadoActivo = this.pendingEstadoCasoActual;
+      this.comentarioCasoActual = this.comentarioInput.trim();
+      this.mostrarDescartarOpciones = false;
+      this.pendingEstadoCasoActual = null;
+      this.comentarioInput = '';
+      return;
+    }
+
+    if (!this.pendingCambioEstado) return;
+    const { caso, estado } = this.pendingCambioEstado;
+    await this.cambiarEstadoCaso(caso, estado, this.comentarioInput.trim());
+    this.pendingCambioEstado = null;
+    this.comentarioInput = '';
+  }
+
+  cancelarCambioEstado(): void {
+    this.mostrarModalComentario = false;
+    this.pendingEstadoCasoActual = null;
+    this.pendingCambioEstado = null;
+    this.comentarioInput = '';
+    this.historial = [...this.historial];
+    this.cdr.detectChanges();
+  }
+
+  async cambiarEstadoCaso(caso: CasoModel, nuevoEstado: EstadoCaso, comentario = ''): Promise<void> {
     if (!caso.id || !nuevoEstado) return;
     this.cambiandoEstado = { ...this.cambiandoEstado, [caso.id]: true };
     this.cdr.detectChanges();
@@ -377,9 +682,9 @@ export class DashboardLlamador implements OnInit, OnDestroy {
         caso.id, nuevoEstado,
         this.auth.getCurrentEmail(),
         this.apodoUsuario,
-        caso
+        caso,
+        comentario
       );
-      // Actualizar localmente
       const idx = this.historial.findIndex(c => c.id === caso.id);
       if (idx >= 0) this.historial[idx] = { ...this.historial[idx], estado: nuevoEstado };
     } finally {
@@ -388,14 +693,53 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     }
   }
 
+  get seguimiento(): CasoModel[] {
+    return this.historial.filter(c =>
+      c.estado === 'pendiente' || c.estado === 'interesado' || c.estado === 'nocontesto'
+    );
+  }
+
+  // ── Stats card ─────────────────────────────────────────────
+  readonly OBJETIVO_DIARIO = 25;
+
+  private get _hoyISO(): string {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  /** Casos cuyo historialEstados tiene al menos una entrada de hoy (primer contacto o recontacto) */
+  get contactosHoy(): number {
+    const hoy = this._hoyISO;
+    return this.historial.filter(c => {
+      const hist = c.historialEstados ?? [];
+      return hist.some(h => h.timestamp?.startsWith(hoy));
+    }).length;
+  }
+
+  /** Seguimientos registrados hoy (excluye el primer contacto — solo recontactos) */
+  get recontactosHoy(): number {
+    const hoy = this._hoyISO;
+    return this.historial.reduce((acc, c) => {
+      const segs = c.seguimientos ?? [];
+      return acc + segs.filter(s => s.timestamp?.startsWith(hoy)).length;
+    }, 0);
+  }
+
+  /** Total casos marcados como interesado/pendiente */
+  get interesadosCount(): number { return this.pendientes.length; }
+
+  /** Total casos con abogado */
+  get conAbogadoCount(): number {
+    return this.historial.filter(c => c.estado === 'conabogado').length;
+  }
+
   abrirWaNumero(codigoArea: string, numero: string): void {
     const tel = (codigoArea + numero).replace(/\D/g, '');
-    window.open(`https://wa.me/54${tel}`, '_blank');
+    window.open(`https://wa.me/54${tel}`, 'wa_llamador');
   }
 
   abrirWhatsappVinculo(documento: string): void {
     const telefono = documento.replace(/\D/g, '');
-    window.open(`https://wa.me/54${telefono}`, '_blank');
+    window.open(`https://wa.me/54${telefono}`, 'wa_llamador');
   }
 
   async solicitarDatoNuevo(): Promise<void> {
@@ -407,10 +751,11 @@ export class DashboardLlamador implements OnInit, OnDestroy {
         this.estadoActivo,
         this.auth.getCurrentEmail(),
         this.apodoUsuario,
-        this.caso
+        this.caso,
+        this.comentarioCasoActual
       );
-      // Actualizar historial con referencia nueva para forzar CD
       this.historial = [{ ...this.caso, estado: this.estadoActivo, procesado: true }, ...this.historial];
+      this.comentarioCasoActual = '';
     }
 
     this.buscando = true;

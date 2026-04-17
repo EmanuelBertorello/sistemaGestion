@@ -4,16 +4,20 @@ import { CasoModel } from '../comp/dashboard-llamador/caso.model';
 @Injectable({ providedIn: 'root' })
 export class EmailService {
 
-  getEmailDelCaso(caso: CasoModel): string | null {
+  /** Devuelve TODOS los emails válidos cacheados en certeroData */
+  getEmailsDelCaso(caso: CasoModel): string[] {
     const emails: any[] = caso.certeroData?.['emails'] ?? [];
-    const primero = emails.find(e => e.direccion?.includes('@'));
-    return primero?.direccion ?? null;
+    return emails
+      .map(e => (e.direccion ?? '').trim())
+      .filter(d => d.includes('@'));
   }
 
-  abrirMailto(caso: CasoModel): { destinatario: string } {
-    const emailReal = this.getEmailDelCaso(caso) ?? '';
-    const destinatario = emailReal;
+  /** Legacy: primer email (para compatibilidad) */
+  getEmailDelCaso(caso: CasoModel): string | null {
+    return this.getEmailsDelCaso(caso)[0] ?? null;
+  }
 
+  private buildMailtoUrl(destinatario: string, caso: CasoModel): string {
     const nombreCompleto = caso.Trabajador || 'usted';
     let primerNombre = nombreCompleto.includes(',')
       ? nombreCompleto.split(',')[1]?.trim().split(' ')[0] ?? 'Cliente'
@@ -21,7 +25,6 @@ export class EmailService {
     primerNombre = primerNombre.charAt(0).toUpperCase() + primerNombre.slice(1).toLowerCase();
 
     const asunto = encodeURIComponent('Tu accidente de trabajo — revisión médica sin cargo');
-
     const cuerpo = encodeURIComponent(
 `Hola ${primerNombre}, ¿cómo estás?
 
@@ -42,8 +45,38 @@ Carla Vignale
 WhatsApp: +54 9 3416 05-5454`
     );
 
-    window.location.href = `mailto:${destinatario}?subject=${asunto}&body=${cuerpo}`;
+    return `mailto:${destinatario}?subject=${asunto}&body=${cuerpo}`;
+  }
 
-    return { destinatario };
+  /**
+   * Abre UN mailto por cada email encontrado en certeroData.
+   * El primero usa window.location.href (abre en la misma pestaña/app de correo),
+   * los adicionales usan window.open con un pequeño delay.
+   * Devuelve la lista de destinatarios abiertos (vacía si no hay emails).
+   */
+  abrirMailtos(caso: CasoModel): { destinatarios: string[] } {
+    const destinatarios = this.getEmailsDelCaso(caso);
+
+    if (destinatarios.length === 0) {
+      return { destinatarios: [] };
+    }
+
+    // Primero abrimos todos menos el último con window.open
+    for (let i = 0; i < destinatarios.length - 1; i++) {
+      const url = this.buildMailtoUrl(destinatarios[i], caso);
+      window.open(url, `_mail_${i}`);
+    }
+
+    // El último (o único) lo abrimos con location para que no quede bloqueado por popup
+    const urlUltimo = this.buildMailtoUrl(destinatarios[destinatarios.length - 1], caso);
+    window.location.href = urlUltimo;
+
+    return { destinatarios };
+  }
+
+  /** @deprecated Usar abrirMailtos */
+  abrirMailto(caso: CasoModel): { destinatario: string } {
+    const { destinatarios } = this.abrirMailtos(caso);
+    return { destinatario: destinatarios[0] ?? '' };
   }
 }

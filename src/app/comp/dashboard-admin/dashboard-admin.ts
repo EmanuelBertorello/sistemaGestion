@@ -9,9 +9,9 @@ import { CerteroService } from '../../services/certero.service';
 import { CasoModel } from '../dashboard-llamador/caso.model';
 import * as XLSX from 'xlsx';
 
-type SeccionActiva = 'estadisticas' | 'acepto' | 'interesado' | 'sincontacto' | 'conabogado' | 'nointeresado' | 'cargar' | 'historial' | 'duplicados' | 'noticias';
+type SeccionActiva = 'estadisticas' | 'acepto' | 'interesado' | 'sincontacto' | 'conabogado' | 'nointeresado' | 'cargar' | 'historial' | 'duplicados' | 'noticias' | 'cola';
 
-type EstadoUpload = 'idle' | 'preview' | 'subiendo' | 'done' | 'error';
+type EstadoUpload = 'idle' | 'preview' | 'subiendo' | 'limpiando' | 'done' | 'error';
 
 interface NotifAcepto {
   id: string;
@@ -116,6 +116,12 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   uploadTotal = 0;
   uploadResult: UploadResult | null = null;
   uploadError = '';
+
+  // limpieza automática post-upload
+  limpiezaPaso = '';
+  limpiezaVentaSiEliminados = 0;
+  limpiezaSinVentaEliminados = 0;
+  limpiezaDuplicadosEliminados = 0;
 
   get uploadPct(): number {
     if (this.uploadTotal === 0) return 0;
@@ -291,6 +297,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   get esCargar(): boolean { return this.seccionActiva === 'cargar'; }
   get esHistorial(): boolean { return this.seccionActiva === 'historial'; }
   get esDuplicados(): boolean { return this.seccionActiva === 'duplicados'; }
+  get esCola(): boolean { return this.seccionActiva === 'cola'; }
 
   // ── Duplicados ────────────────────────────────────────────
   estadoDupli: 'idle' | 'buscando' | 'done' | 'error' = 'idle';
@@ -306,6 +313,26 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   estadoVentaSi: 'idle' | 'buscando' | 'done' | 'error' = 'idle';
   ventaSiEliminados = 0;
   ventaSiError = '';
+
+  // ── Eliminar sin valor de Venta ───────────────────────────
+  estadoSinVenta: 'idle' | 'buscando' | 'done' | 'error' = 'idle';
+  sinVentaEliminados = 0;
+  sinVentaError = '';
+
+  // ── Cola Personal ─────────────────────────────────────────
+  colaCargando = false;
+  colaEstados: Array<{ apodo: string; cantidad: number }> = [];
+  reglasCola: Array<{ id: string; localidad: string; apodo: string }> = [];
+  nuevaReglaLocalidad = '';
+  nuevaReglaApodo = '';
+  colaReglaError = '';
+  colaAplicandoReglas = false;
+  colaReglaAsignados = 0;
+
+  // Límites de pendientes por llamador
+  limitesConfig: Record<string, number> = {};   // apodo → límite actual en edición
+  limitesGuardando: Record<string, boolean> = {};
+  limitesMensaje: Record<string, string> = {};
 
   async vaciarBDMadre() {
     this.estadoVaciar = 'borrando';
@@ -341,6 +368,25 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     } catch (e: any) {
       this.ventaSiError = e.message ?? 'Error al eliminar.';
       this.estadoVentaSi = 'error';
+    }
+    this.cdr.detectChanges();
+  }
+
+  async eliminarSinVenta() {
+    this.estadoSinVenta = 'buscando';
+    this.sinVentaEliminados = 0;
+    this.sinVentaError = '';
+    this.cdr.detectChanges();
+    try {
+      const result = await this.fs.eliminarSinVenta((n) => {
+        this.sinVentaEliminados = n;
+        this.cdr.detectChanges();
+      });
+      this.sinVentaEliminados = result.eliminados;
+      this.estadoSinVenta = 'done';
+    } catch (e: any) {
+      this.sinVentaError = e.message ?? 'Error al eliminar.';
+      this.estadoSinVenta = 'error';
     }
     this.cdr.detectChanges();
   }
@@ -661,25 +707,37 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   async enviarEmail(caso: CasoModel) {
     const id = caso.id ?? caso.CUIL ?? Math.random().toString();
     this.enviandoEmail[id] = true;
+    this.emailError[id] = '';
     this.cdr.detectChanges();
     try {
-      // Si no hay certeroData (o no tiene emails), buscar en la API y guardar
-      const emailsCacheados: any[] = caso.certeroData?.['emails'] ?? [];
+      // 1. Si no hay certeroData con emails, consultar Certero y cachear
+      let emailsCacheados: string[] = this.emailSvc.getEmailsDelCaso(caso);
       if (emailsCacheados.length === 0 && caso.CUIL) {
         const data = await this.certero.getSumario(caso.CUIL);
         if (data && !data._noEncontrado) {
           caso = { ...caso, certeroData: data as any };
           if (caso.id) this.fs.guardarSumarioCertero(caso.id, data);
+          emailsCacheados = this.emailSvc.getEmailsDelCaso(caso);
         }
       }
-      const { destinatario } = this.emailSvc.abrirMailto(caso);
+
+      // 2. Si aún no hay emails, avisar y salir
+      if (emailsCacheados.length === 0) {
+        this.emailError[id] = 'Sin email en Certero para esta persona';
+        return;
+      }
+
+      // 3. Abrir un mailto por cada email encontrado
+      const { destinatarios } = this.emailSvc.abrirMailtos(caso);
+
+      // 4. Marcar como enviado en Firestore
       this.emailEnviado[id] = true;
       if (caso.id) {
         await this.fs.marcarEmailEnviado(caso.id);
         const idx = this.casosEstado.findIndex(c => c.id === caso.id);
         if (idx >= 0) this.casosEstado[idx] = { ...this.casosEstado[idx], emailEnviado: true };
       }
-      console.log(`Mailto abierto para: ${destinatario}`);
+      console.log(`Mailto abierto para: ${destinatarios.join(', ')}`);
     } catch (e: any) {
       this.emailError[id] = 'Error al abrir mail';
       console.error('Mailto error:', e);
@@ -687,41 +745,6 @@ export class DashboardAdmin implements OnInit, OnDestroy {
       this.enviandoEmail[id] = false;
       this.cdr.detectChanges();
     }
-  }
-
-  generarMailto(caso: CasoModel): string {
-    const nombreCompleto = caso.Trabajador || 'usted';
-    // Extraer apellido: formato puede ser "APELLIDO, NOMBRE" o "APELLIDO NOMBRE"
-    let apellido = nombreCompleto.includes(',')
-      ? nombreCompleto.split(',')[0].trim()
-      : nombreCompleto.split(' ')[0].trim();
-    apellido = apellido.charAt(0).toUpperCase() + apellido.slice(1).toLowerCase();
-
-    const lesion     = caso.Lesion_1        || 'la lesión sufrida';
-    const ocupacion  = caso.Ocupacion       || 'su actividad laboral';
-    const empresa    = caso.Emp_Denominacion|| 'su empleador';
-    const diasILT    = caso.Dias_ILT        ? `${caso.Dias_ILT} días` : 'un período de baja laboral';
-    const tipoAcc    = caso.Tipo_Accidente  || 'accidente laboral';
-
-    const subject = 'Consulta sobre su accidente laboral';
-    const body =
-`Estimado/a Sr./Sra. ${apellido},
-
-Me dirijo a usted en mi carácter de abogado especializado en accidentes laborales y enfermedades profesionales.
-
-He tomado conocimiento de que usted sufrió un ${tipoAcc} en el marco de su actividad como ${ocupacion} en ${empresa}. En ese contexto, y dado que este tipo de lesiones —particularmente ${lesion}— pueden generar secuelas que no siempre son evaluadas en toda su extensión durante el tratamiento inicial, me permito acercarme para ofrecerle una consulta sin cargo.
-
-Cabe destacar que usted atravesó ${diasILT} de incapacidad laboral temporaria. Es importante que sepa que, una vez cerrado el expediente ante la aseguradora, los plazos para reclamar una justa indemnización son limitados. Por eso, es conveniente revisar con tiempo si la incapacidad reconocida refleja realmente el daño que usted sufrió.
-
-Si lo desea, puede contactarme para coordinar una reunión o llamada, sin ningún compromiso de su parte.
-
-Quedo a su disposición.
-
-Saludos cordiales,
-
-Capeletti Abogados`;
-
-    return `mailto:ema-ber2011@live.com.ar?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
   cerrarModal() {
@@ -879,6 +902,25 @@ Capeletti Abogados`;
         }
       );
       this.uploadResult = result;
+
+      // Limpieza automática
+      this.estadoUpload = 'limpiando';
+
+      this.limpiezaPaso = 'Eliminando registros con Venta = SI...';
+      this.cdr.detectChanges();
+      const r1 = await this.fs.eliminarVentaSi();
+      this.limpiezaVentaSiEliminados = r1.eliminados;
+
+      this.limpiezaPaso = 'Eliminando registros sin valor de Venta...';
+      this.cdr.detectChanges();
+      const r2 = await this.fs.eliminarSinVenta();
+      this.limpiezaSinVentaEliminados = r2.eliminados;
+
+      this.limpiezaPaso = 'Eliminando duplicados...';
+      this.cdr.detectChanges();
+      const r3 = await this.fs.eliminarDuplicados();
+      this.limpiezaDuplicadosEliminados = r3.eliminados;
+
       this.estadoUpload = 'done';
     } catch (err: any) {
       this.uploadError = err.message ?? 'Error durante la carga.';
@@ -898,6 +940,87 @@ Capeletti Abogados`;
     this.uploadTotal = 0;
     this.uploadResult = null;
     this.uploadError = '';
+    this.limpiezaPaso = '';
+    this.limpiezaVentaSiEliminados = 0;
+    this.limpiezaSinVentaEliminados = 0;
+    this.limpiezaDuplicadosEliminados = 0;
+  }
+
+  // ── Cola Personal ─────────────────────────────────────────
+
+  async cargarDatosCola(): Promise<void> {
+    this.colaCargando = true;
+    this.cdr.detectChanges();
+    try {
+      [this.colaEstados, this.reglasCola] = await Promise.all([
+        this.fs.getEstadoColas(),
+        this.fs.getReglasCola(),
+      ]);
+      // Para cada apodo con cola, cargar su límite actual
+      for (const { apodo } of this.colaEstados) {
+        if (!(apodo in this.limitesConfig)) {
+          const cfg = await this.fs.getConfigLlamador(apodo);
+          this.limitesConfig[apodo] = cfg.limitePendientes;
+        }
+      }
+    } finally {
+      this.colaCargando = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async guardarLimiteLlamador(apodo: string): Promise<void> {
+    this.limitesGuardando[apodo] = true;
+    this.limitesMensaje[apodo] = '';
+    this.cdr.detectChanges();
+    try {
+      await this.fs.setConfigLlamador(apodo, this.limitesConfig[apodo]);
+      this.limitesMensaje[apodo] = '✓ Guardado';
+    } catch {
+      this.limitesMensaje[apodo] = 'Error al guardar';
+    } finally {
+      this.limitesGuardando[apodo] = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async setSeccionCola(): Promise<void> {
+    this.seccionActiva = 'cola';
+    await this.cargarDatosCola();
+  }
+
+  async agregarReglaCola(): Promise<void> {
+    this.colaReglaError = '';
+    const loc = this.nuevaReglaLocalidad.trim();
+    const apodo = this.nuevaReglaApodo.trim();
+    if (!loc || !apodo) { this.colaReglaError = 'Completá ambos campos.'; return; }
+    await this.fs.agregarReglaCola(loc, apodo);
+    this.nuevaReglaLocalidad = '';
+    this.nuevaReglaApodo = '';
+    await this.cargarDatosCola();
+  }
+
+  async eliminarReglaCola(id: string): Promise<void> {
+    await this.fs.eliminarReglaCola(id);
+    this.reglasCola = this.reglasCola.filter(r => r.id !== id);
+    this.cdr.detectChanges();
+  }
+
+  async aplicarReglasCola(): Promise<void> {
+    this.colaAplicandoReglas = true;
+    this.colaReglaAsignados = 0;
+    this.cdr.detectChanges();
+    try {
+      const result = await this.fs.aplicarReglasCola(n => {
+        this.colaReglaAsignados = n;
+        this.cdr.detectChanges();
+      });
+      this.colaReglaAsignados = result.asignados;
+      await this.cargarDatosCola();
+    } finally {
+      this.colaAplicandoReglas = false;
+      this.cdr.detectChanges();
+    }
   }
 
   // ── Nav ──────────────────────────────────────────────────

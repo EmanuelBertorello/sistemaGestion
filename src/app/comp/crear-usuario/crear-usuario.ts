@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
@@ -25,14 +25,23 @@ export class CrearUsuario implements OnInit {
   // ── Administrar ──
   usuarios: UsuarioApp[] = [];
   cargandoUsuarios = false;
+
+  // Edición inline
   editandoUid: string | null = null;
   apodoEdit = '';
+  emailEdit = '';
   guardandoApodo = false;
+
+  // Eliminación
+  confirmandoEliminarUid: string | null = null;
+  eliminandoUid: string | null = null;
+  eliminarError = '';
 
   constructor(
     private auth: AuthService,
     private fs: FirestoreService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   async ngOnInit() {
@@ -69,7 +78,6 @@ export class CrearUsuario implements OnInit {
       const uid = await this.auth.createUser(this.email, this.password);
       await this.fs.guardarUsuario(uid, this.email, this.apodo);
       this.successMsg = `Usuario ${this.email} creado correctamente.`;
-      // Refrescar lista
       await this.cargarUsuarios();
       this.email = '';
       this.password = '';
@@ -84,28 +92,72 @@ export class CrearUsuario implements OnInit {
 
   async cargarUsuarios() {
     this.cargandoUsuarios = true;
+    this.cdr.detectChanges();
     this.usuarios = await this.fs.getUsuarios();
     this.cargandoUsuarios = false;
+    this.cdr.detectChanges();
   }
+
+  // ── Edición ──────────────────────────────────────────────
 
   iniciarEdicion(u: UsuarioApp) {
     this.editandoUid = u.uid;
-    this.apodoEdit = u.apodo;
+    this.apodoEdit = u.apodo ?? '';
+    this.emailEdit = u.email ?? '';
+    this.confirmandoEliminarUid = null;
   }
 
   cancelarEdicion() {
     this.editandoUid = null;
     this.apodoEdit = '';
+    this.emailEdit = '';
   }
 
-  async guardarApodo(u: UsuarioApp) {
+  async guardarEdicion(u: UsuarioApp) {
     this.guardandoApodo = true;
+    this.cdr.detectChanges();
     try {
-      await this.fs.actualizarApodo(u.uid, this.apodoEdit);
-      u.apodo = this.apodoEdit;
+      if (this.apodoEdit !== u.apodo) {
+        await this.fs.actualizarApodo(u.uid, this.apodoEdit.trim());
+        u.apodo = this.apodoEdit.trim();
+      }
+      if (this.emailEdit.trim() && this.emailEdit.trim() !== u.email) {
+        await this.fs.actualizarEmailUsuario(u.uid, this.emailEdit.trim());
+        u.email = this.emailEdit.trim();
+      }
       this.editandoUid = null;
     } finally {
       this.guardandoApodo = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  // ── Eliminación ──────────────────────────────────────────
+
+  pedirConfirmacion(u: UsuarioApp) {
+    this.confirmandoEliminarUid = u.uid;
+    this.eliminarError = '';
+    this.editandoUid = null;
+  }
+
+  cancelarEliminar() {
+    this.confirmandoEliminarUid = null;
+    this.eliminarError = '';
+  }
+
+  async confirmarEliminar(u: UsuarioApp) {
+    this.eliminandoUid = u.uid;
+    this.eliminarError = '';
+    this.cdr.detectChanges();
+    try {
+      await this.fs.eliminarUsuarioFirestore(u.uid);
+      this.usuarios = this.usuarios.filter(x => x.uid !== u.uid);
+      this.confirmandoEliminarUid = null;
+    } catch (e: any) {
+      this.eliminarError = 'Error al eliminar. Intentá de nuevo.';
+    } finally {
+      this.eliminandoUid = null;
+      this.cdr.detectChanges();
     }
   }
 

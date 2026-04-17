@@ -20,7 +20,7 @@
   <!-- Header -->
   <div class="relative z-10 flex items-center justify-between px-8 py-4">
     <div>
-      <div class="text-xl font-bold tracking-widest text-white uppercase drop-shadow">Capeletti</div>
+      <div class="text-xl font-bold tracking-widest text-white uppercase drop-shadow"></div>
       <div class="text-xs tracking-[0.3em] text-blue-100 uppercase">Abogados · Gestión de Usuarios</div>
     </div>
     <button (click)="volver()"
@@ -170,7 +170,9 @@
             </thead>
             <tbody>
               @for (u of usuarios; track u.uid) {
-                <tr class="border-b border-gray-100 hover:bg-gray-50 transition">
+                <tr class="border-b border-gray-100 transition"
+                    [class.bg-red-50]="confirmandoEliminarUid === u.uid"
+                    [class.hover:bg-gray-50]="confirmandoEliminarUid !== u.uid">
 
                   <!-- Avatar + uid -->
                   <td class="px-6 py-4">
@@ -184,15 +186,23 @@
                     </div>
                   </td>
 
-                  <!-- Email -->
-                  <td class="px-6 py-4 text-gray-700">{{ u.email }}</td>
+                  <!-- Email — editable en modo edición -->
+                  <td class="px-6 py-4">
+                    @if (editandoUid === u.uid) {
+                      <input type="email" [(ngModel)]="emailEdit"
+                        class="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        placeholder="Correo electrónico"/>
+                    } @else {
+                      <span class="text-gray-700">{{ u.email }}</span>
+                    }
+                  </td>
 
-                  <!-- Apodo — modo normal / modo edición -->
+                  <!-- Apodo — editable en modo edición -->
                   <td class="px-6 py-4">
                     @if (editandoUid === u.uid) {
                       <input type="text" [(ngModel)]="apodoEdit"
                         class="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                        placeholder="Ingresá un apodo"/>
+                        placeholder="Apodo"/>
                     } @else {
                       @if (u.apodo) {
                         <span class="bg-blue-50 text-blue-800 px-2 py-1 rounded-full text-xs font-semibold">{{ u.apodo }}</span>
@@ -203,10 +213,12 @@
                   </td>
 
                   <!-- Acciones -->
-                  <td class="px-6 py-4 text-center">
+                  <td class="px-6 py-4">
+
+                    <!-- Modo edición -->
                     @if (editandoUid === u.uid) {
                       <div class="flex items-center justify-center gap-2">
-                        <button (click)="guardarApodo(u)" [disabled]="guardandoApodo"
+                        <button (click)="guardarEdicion(u)" [disabled]="guardandoApodo"
                           class="bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                           @if (guardandoApodo) {
                             <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
@@ -221,12 +233,48 @@
                           Cancelar
                         </button>
                       </div>
-                    } @else {
-                      <button (click)="iniciarEdicion(u)"
-                        class="text-blue-500 hover:text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50 transition">
-                        ✎ Editar apodo
-                      </button>
                     }
+
+                    <!-- Modo confirmación de eliminar -->
+                    @else if (confirmandoEliminarUid === u.uid) {
+                      <div class="flex flex-col items-center gap-2">
+                        <p class="text-xs text-red-700 font-semibold text-center">¿Eliminar a {{ u.apodo || u.email }}?</p>
+                        <div class="flex gap-2">
+                          <button (click)="confirmarEliminar(u)" [disabled]="eliminandoUid === u.uid"
+                            class="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                            @if (eliminandoUid === u.uid) {
+                              <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                              </svg>
+                            }
+                            Sí, eliminar
+                          </button>
+                          <button (click)="cancelarEliminar()"
+                            class="text-gray-600 text-xs px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition">
+                            Cancelar
+                          </button>
+                        </div>
+                        @if (eliminarError) {
+                          <p class="text-xs text-red-600">{{ eliminarError }}</p>
+                        }
+                      </div>
+                    }
+
+                    <!-- Modo normal -->
+                    @else {
+                      <div class="flex items-center justify-center gap-2">
+                        <button (click)="iniciarEdicion(u)"
+                          class="text-blue-500 hover:text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50 transition">
+                          ✎ Editar
+                        </button>
+                        <button (click)="pedirConfirmacion(u)"
+                          class="text-red-400 hover:text-red-600 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition">
+                          🗑 Eliminar
+                        </button>
+                      </div>
+                    }
+
                   </td>
 
                 </tr>

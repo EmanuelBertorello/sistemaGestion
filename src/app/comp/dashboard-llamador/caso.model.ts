@@ -97,10 +97,23 @@ export interface CasoModel {
   ASGINADO?: string;         // apodo del llamador (typo original del campo)
   procesadoTimestamp: any;
   creadoEn?: any;
-  historialEstados?: Array<{ estado: string; timestamp: string; por: string; apodo: string }>;
+  historialEstados?: Array<{ estado: string; timestamp: string; por: string; apodo: string; comentario?: string }>;
   emailEnviado?: boolean;
   cartaImpresa?: boolean;
   ocultadoPor?: string[];   // emails de llamadores que ocultaron este caso de su historial
   nroExpediente?: string;
   certeroData?: Record<string, any>;
+  recontactos?: Array<{ timestamp: string; comentario: string; por: string; apodo: string }>; // legacy
+  seguimientos?: Array<{
+    timestamp: string;
+    tipo: string;       // 'Llamar' | 'WhatsApp' | 'Enviar info'
+    fecha: string;
+    hora: string;
+    intencion: string;
+    nota: string;
+    por: string;
+    apodo: string;
+  }>;
+  proximaAccion?: { tipo: string; fecha: string; hora: string };
+  intencion?: string;
 }
