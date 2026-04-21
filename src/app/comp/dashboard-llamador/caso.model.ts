@@ -99,6 +99,7 @@ export interface CasoModel {
   creadoEn?: any;
   historialEstados?: Array<{ estado: string; timestamp: string; por: string; apodo: string; comentario?: string }>;
   emailEnviado?: boolean;
+  emailErrorMsg?: string;
   cartaImpresa?: boolean;
   ocultadoPor?: string[];   // emails de llamadores que ocultaron este caso de su historial
   nroExpediente?: string;

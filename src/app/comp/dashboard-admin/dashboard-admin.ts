@@ -6,6 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { FirestoreService, UploadResult, LlamadorStats, NoticiaItem } from '../../services/firestore.service';
 import { EmailService } from '../../services/email.service';
 import { CerteroService } from '../../services/certero.service';
+import { AnexoService } from '../../services/anexo.service';
 import { CasoModel } from '../dashboard-llamador/caso.model';
 import * as XLSX from 'xlsx';
 
@@ -54,10 +55,15 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     private fs: FirestoreService,
     private emailSvc: EmailService,
     private certero: CerteroService,
+    private anexo: AnexoService,
     private zone: NgZone,
     private cdr: ChangeDetectorRef,
     @Inject(PLATFORM_ID) private platformId: object
   ) {}
+
+  generarAnexo(caso: CasoModel): void {
+    this.anexo.generarAnexo(caso);
+  }
 
   seccionActiva: SeccionActiva = 'estadisticas';
 
@@ -81,6 +87,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   cargandoHistorial = true;
   historialFiltroLlamador = '';
   historialFiltroEstado = '';
+  historialFiltroApellido = '';
 
   // ── Casos por estado ──────────────────────────────────────
   casosEstado: CasoModel[] = [];
@@ -421,13 +428,21 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   }
 
   get historialFiltrado(): CasoModel[] {
+    const q = this.historialFiltroApellido.trim().toLowerCase();
     return this.historial.filter(c => {
       if (!c.Trabajador) return false;
       const okLlamador = !this.historialFiltroLlamador || c.procesadoPor === this.historialFiltroLlamador;
       const okEstado = !this.historialFiltroEstado
         || (this.historialFiltroEstado === 'interesado' ? this.esPendiente(c.estado) : c.estado === this.historialFiltroEstado);
-      return okLlamador && okEstado;
+      const okApellido = !q || (c.Trabajador || '').toLowerCase().includes(q);
+      return okLlamador && okEstado && okApellido;
     });
+  }
+
+  get casosEstadoFiltrado(): CasoModel[] {
+    const q = this.historialFiltroApellido.trim().toLowerCase();
+    if (!q) return this.casosEstado;
+    return this.casosEstado.filter(c => (c.Trabajador || '').toLowerCase().includes(q));
   }
 
   get llamadoresUnicos(): string[] {
@@ -721,26 +736,46 @@ export class DashboardAdmin implements OnInit, OnDestroy {
         }
       }
 
-      // 2. Si aún no hay emails, avisar y salir
+      // 2. Si aún no hay emails, guardar error y salir
       if (emailsCacheados.length === 0) {
-        this.emailError[id] = 'Sin email en Certero para esta persona';
+        const msg = 'Sin email en Certero';
+        this.emailError[id] = msg;
+        if (caso.id) {
+          await this.fs.marcarEmailError(caso.id, msg);
+          const patch = { emailErrorMsg: msg };
+          const idxEstado = this.casosEstado.findIndex(c => c.id === caso.id);
+          if (idxEstado >= 0) this.casosEstado[idxEstado] = { ...this.casosEstado[idxEstado], ...patch };
+          const idxModal = this.modalCasos.findIndex(c => c.id === caso.id);
+          if (idxModal >= 0) this.modalCasos[idxModal] = { ...this.modalCasos[idxModal], ...patch };
+        }
         return;
       }
 
-      // 3. Abrir un mailto por cada email encontrado
+      // 3. Abrir Gmail compose por cada email encontrado
       const { destinatarios } = this.emailSvc.abrirMailtos(caso);
 
-      // 4. Marcar como enviado en Firestore
+      // 4. Marcar como enviado en Firestore y actualizar ambas listas en memoria
       this.emailEnviado[id] = true;
       if (caso.id) {
         await this.fs.marcarEmailEnviado(caso.id);
-        const idx = this.casosEstado.findIndex(c => c.id === caso.id);
-        if (idx >= 0) this.casosEstado[idx] = { ...this.casosEstado[idx], emailEnviado: true };
+        const patch = { emailEnviado: true, emailErrorMsg: '' };
+        const idxEstado = this.casosEstado.findIndex(c => c.id === caso.id);
+        if (idxEstado >= 0) this.casosEstado[idxEstado] = { ...this.casosEstado[idxEstado], ...patch };
+        const idxModal = this.modalCasos.findIndex(c => c.id === caso.id);
+        if (idxModal >= 0) this.modalCasos[idxModal] = { ...this.modalCasos[idxModal], ...patch };
       }
-      console.log(`Mailto abierto para: ${destinatarios.join(', ')}`);
     } catch (e: any) {
-      this.emailError[id] = 'Error al abrir mail';
-      console.error('Mailto error:', e);
+      const msg = 'Error al abrir Gmail';
+      this.emailError[id] = msg;
+      if (caso.id) {
+        await this.fs.marcarEmailError(caso.id, msg);
+        const patch = { emailErrorMsg: msg };
+        const idxEstado = this.casosEstado.findIndex(c => c.id === caso.id);
+        if (idxEstado >= 0) this.casosEstado[idxEstado] = { ...this.casosEstado[idxEstado], ...patch };
+        const idxModal = this.modalCasos.findIndex(c => c.id === caso.id);
+        if (idxModal >= 0) this.modalCasos[idxModal] = { ...this.modalCasos[idxModal], ...patch };
+      }
+      console.error('Gmail error:', e);
     } finally {
       this.enviandoEmail[id] = false;
       this.cdr.detectChanges();

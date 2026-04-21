@@ -250,8 +250,12 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     const identificador = this.apodoUsuario || this.auth.getCurrentEmail();
 
     if (!buscarNuevo) {
-      const yaAsignado = await this.firestoreService.getCasoAsignadoA(identificador);
+      const yaAsignado = await this.firestoreService.getCasoAsignadoA(identificador, this.auth.getCurrentEmail());
       if (yaAsignado) {
+        // Si el ASGINADO no coincide con el identificador actual, normalizarlo
+        if (yaAsignado.id && yaAsignado.ASGINADO !== identificador) {
+          this.firestoreService.reservarCaso(yaAsignado.id, identificador);
+        }
         this.caso = yaAsignado;
         this.cargarSumario(yaAsignado.CUIL);
         return;
@@ -309,7 +313,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   private async cargarHistorial() {
     const email = this.auth.getCurrentEmail();
     if (!email) return;
-    this.historial = await this.firestoreService.getHistorialPor(email);
+    this.historial = await this.firestoreService.getHistorialPor(email, this.apodoUsuario);
   }
 
   get estadoActivoLabel(): string {

@@ -152,14 +152,30 @@ export class FirestoreService {
     return { eliminados };
   }
 
-  async getCasoAsignadoA(apodo: string): Promise<CasoModel | null> {
+  async getCasoAsignadoA(apodo: string, emailFallback?: string): Promise<CasoModel | null> {
     const ref = collection(this.db, COL_CASOS);
+
+    // Query principal con el identificador recibido
     const q = query(ref, where('procesado', '==', false), where('ASGINADO', '==', apodo), limit(1));
     const snap = await getDocs(q);
-    if (!snap.empty) {
-      const d = snap.docs[0];
-      return { id: d.id, ...d.data() } as CasoModel;
+    if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() } as CasoModel;
+
+    // Fallback: si el apodo es un email, probar también la parte antes del @
+    const esMail = apodo.includes('@');
+    if (esMail) {
+      const prefijo = apodo.split('@')[0];
+      const q2 = query(ref, where('procesado', '==', false), where('ASGINADO', '==', prefijo), limit(1));
+      const snap2 = await getDocs(q2);
+      if (!snap2.empty) return { id: snap2.docs[0].id, ...snap2.docs[0].data() } as CasoModel;
     }
+
+    // Fallback: si se pasa un email distinto al apodo, probarlo también
+    if (emailFallback && emailFallback !== apodo) {
+      const q3 = query(ref, where('procesado', '==', false), where('ASGINADO', '==', emailFallback), limit(1));
+      const snap3 = await getDocs(q3);
+      if (!snap3.empty) return { id: snap3.docs[0].id, ...snap3.docs[0].data() } as CasoModel;
+    }
+
     return null;
   }
 
@@ -310,15 +326,36 @@ export class FirestoreService {
     }
   }
 
-  async getHistorialPor(email: string): Promise<CasoModel[]> {
+  async getHistorialPor(email: string, apodo?: string): Promise<CasoModel[]> {
     const ref = collection(this.db, COL_CASOS);
-    const q = query(
-      ref,
-      where('procesadoPor', '==', email),
-      where('procesado', '==', true)
-    );
-    const snap = await getDocs(q);
-    const casos = snap.docs.map(d => ({ id: d.id, ...d.data() } as CasoModel));
+    const apodoEfectivo = apodo && apodo !== email ? apodo : email.split('@')[0];
+
+    // Query 1: por procesadoPor (casos donde el llamador marcó el estado)
+    const q1 = getDocs(query(ref, where('procesadoPor', '==', email)));
+    // Query 2: por ASGINADO + procesado=true
+    const q2 = getDocs(query(ref, where('ASGINADO', '==', apodoEfectivo), where('procesado', '==', true)));
+    // Query 3: por ASGINADO sin restricción de procesado (captura casos movidos vía cambiarEstadoCaso)
+    const q3 = getDocs(query(ref, where('ASGINADO', '==', apodoEfectivo)));
+
+    const [snap1, snap2, snap3] = await Promise.all([q1, q2, q3]);
+
+    const ESTADOS_VALIDOS = new Set(['acepto', 'pendiente', 'interesado', 'nocontesto', 'sincontacto', 'conabogado', 'nointeresado']);
+
+    const seen = new Set<string>();
+    const casos: CasoModel[] = [];
+    for (const snap of [snap1, snap2, snap3]) {
+      for (const d of snap.docs) {
+        if (!seen.has(d.id)) {
+          const data = d.data() as any;
+          // Solo incluir si tiene un estado válido (descartar casos en cola sin procesar)
+          if (ESTADOS_VALIDOS.has(data['estado'])) {
+            seen.add(d.id);
+            casos.push({ id: d.id, ...data } as CasoModel);
+          }
+        }
+      }
+    }
+
     return casos.sort((a, b) => {
       const ta = a.procesadoTimestamp ?? '';
       const tb = b.procesadoTimestamp ?? '';
@@ -511,7 +548,11 @@ export class FirestoreService {
   }
 
   async marcarEmailEnviado(id: string): Promise<void> {
-    await updateDoc(doc(this.db, COL_CASOS, id), { emailEnviado: true });
+    await updateDoc(doc(this.db, COL_CASOS, id), { emailEnviado: true, emailErrorMsg: '' });
+  }
+
+  async marcarEmailError(id: string, msg: string): Promise<void> {
+    await updateDoc(doc(this.db, COL_CASOS, id), { emailErrorMsg: msg });
   }
 
   async ocultarCasoDeHistorial(id: string, email: string): Promise<void> {
