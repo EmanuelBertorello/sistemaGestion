@@ -46,13 +46,6 @@ WhatsApp: +54 9 3416 05-5454`
     return `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(destinatario)}&su=${asunto}&body=${cuerpo}`;
   }
 
-<<<<<<< HEAD
-=======
-  /**
-   * Abre Gmail compose por cada email encontrado en certeroData (en pestañas nuevas).
-   * Devuelve la lista de destinatarios abiertos (vacía si no hay emails).
-   */
->>>>>>> a780e5c (90%)
   abrirMailtos(caso: CasoModel): { destinatarios: string[] } {
     const destinatarios = this.getEmailsDelCaso(caso);
 
@@ -60,15 +53,9 @@ WhatsApp: +54 9 3416 05-5454`
       return { destinatarios: [] };
     }
 
-<<<<<<< HEAD
-    for (const destinatario of destinatarios) {
-      const url = this.buildGmailUrl(destinatario, caso);
-      window.open(url, '_blank');
-=======
     for (let i = 0; i < destinatarios.length; i++) {
       const url = this.buildGmailUrl(destinatarios[i], caso);
       window.open(url, `_gmail_${i}`);
->>>>>>> a780e5c (90%)
     }
 
     return { destinatarios };
