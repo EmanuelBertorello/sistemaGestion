@@ -717,7 +717,7 @@ export class FirestoreService {
   async getCantidadEnCola(): Promise<number> {
     const ref = collection(this.db, COL_CASOS);
     const snap = await getDocs(query(ref, where('procesado', '==', false)));
-    return snap.size;
+    return snap.docs.filter(d => !this._esVentaSi(d.data())).length;
   }
 
   // ── Noticias ──────────────────────────────────────────────

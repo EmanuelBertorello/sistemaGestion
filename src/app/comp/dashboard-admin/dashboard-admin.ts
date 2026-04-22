@@ -129,6 +129,8 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   limpiezaVentaSiEliminados = 0;
   limpiezaSinVentaEliminados = 0;
   limpiezaDuplicadosEliminados = 0;
+  resumenVentaSi = 0;
+  resumenVentaNo = 0;
 
   get uploadPct(): number {
     if (this.uploadTotal === 0) return 0;
@@ -947,6 +949,16 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.uploadSubidos = 0;
     this.uploadTotal = this.datosParaSubir.length;
 
+    // Contar venta=SI y venta=NO antes de subir
+    this.resumenVentaSi = this.datosParaSubir.filter(f => {
+      const v = (f['venta'] ?? '').toString().toLowerCase().trim();
+      return v === 'si' || v === 'sí';
+    }).length;
+    this.resumenVentaNo = this.datosParaSubir.filter(f => {
+      const v = (f['venta'] ?? '').toString().toLowerCase().trim();
+      return v === 'no';
+    }).length;
+
     try {
       const result = await this.fs.uploadCasos(
         this.datosParaSubir,
@@ -994,6 +1006,8 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.limpiezaVentaSiEliminados = 0;
     this.limpiezaSinVentaEliminados = 0;
     this.limpiezaDuplicadosEliminados = 0;
+    this.resumenVentaSi = 0;
+    this.resumenVentaNo = 0;
   }
 
   // ── Cola Personal ─────────────────────────────────────────
