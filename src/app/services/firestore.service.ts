@@ -68,21 +68,32 @@ export class FirestoreService {
 
   // ─── CASOS ───────────────────────────────────────────────
 
+  private _esVentaSi(data: any): boolean {
+    const val = (data['venta'] ?? data['Venta'] ?? data['VENTA'] ?? '').toString().toLowerCase().trim();
+    return val === 'si' || val === 'sí';
+  }
+
   async getSiguienteCaso(): Promise<CasoModel | null> {
     const ref = collection(this.db, COL_CASOS);
-    // Solo casos sin procesar y sin asignar (ASGINADO vacío o no definido)
-    const q = query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''), limit(5));
+    // Solo casos sin procesar y sin asignar (ASGINADO vacío o no definido), excluyendo venta=SI
+    const q = query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''), limit(30));
     const snap = await getDocs(q);
-    if (!snap.empty) {
-      const docSnap = snap.docs[0];
-      return { id: docSnap.id, ...docSnap.data() } as CasoModel;
-    }
-    // Fallback: sin campo ASGINADO (registros viejos)
-    const q2 = query(ref, where('procesado', '==', false), limit(10));
-    const snap2 = await getDocs(q2);
-    const libre = snap2.docs.find(d => !d.data()['ASGINADO']);
+    const libre = snap.docs.find(d => !this._esVentaSi(d.data()));
     if (libre) return { id: libre.id, ...libre.data() } as CasoModel;
+    // Fallback: sin campo ASGINADO (registros viejos)
+    const q2 = query(ref, where('procesado', '==', false), limit(50));
+    const snap2 = await getDocs(q2);
+    const libre2 = snap2.docs.find(d => !d.data()['ASGINADO'] && !this._esVentaSi(d.data()));
+    if (libre2) return { id: libre2.id, ...libre2.data() } as CasoModel;
     return null;
+  }
+
+  async getCasosVentaSi(): Promise<CasoModel[]> {
+    const ref = collection(this.db, COL_CASOS);
+    const snap = await getDocs(query(ref, where('procesado', '==', false)));
+    return snap.docs
+      .filter(d => this._esVentaSi(d.data()))
+      .map(d => ({ id: d.id, ...d.data() } as CasoModel));
   }
 
   /** Elimina todos los documentos de BDmadre (procesados y no procesados) */

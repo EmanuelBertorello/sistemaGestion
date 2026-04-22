@@ -10,7 +10,7 @@ import { AnexoService } from '../../services/anexo.service';
 import { CasoModel } from '../dashboard-llamador/caso.model';
 import * as XLSX from 'xlsx';
 
-type SeccionActiva = 'estadisticas' | 'acepto' | 'interesado' | 'sincontacto' | 'conabogado' | 'nointeresado' | 'cargar' | 'historial' | 'duplicados' | 'noticias' | 'cola';
+type SeccionActiva = 'estadisticas' | 'acepto' | 'interesado' | 'sincontacto' | 'conabogado' | 'nointeresado' | 'cargar' | 'historial' | 'duplicados' | 'noticias' | 'cola' | 'ventasi';
 
 type EstadoUpload = 'idle' | 'preview' | 'subiendo' | 'limpiando' | 'done' | 'error';
 
@@ -286,6 +286,19 @@ export class DashboardAdmin implements OnInit, OnDestroy {
         this.cdr.detectChanges();
       }
     }
+    if (s === 'ventasi') {
+      this.cargandoVentaSi = true;
+      this.casosVentaSi = [];
+      this.cdr.detectChanges();
+      try {
+        this.casosVentaSi = await this.fs.getCasosVentaSi();
+      } catch (e) {
+        console.error('Error cargando casos venta SI:', e);
+      } finally {
+        this.cargandoVentaSi = false;
+        this.cdr.detectChanges();
+      }
+    }
   }
 
   getBarWidth(valor: number, total: number): string {
@@ -305,6 +318,18 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   get esHistorial(): boolean { return this.seccionActiva === 'historial'; }
   get esDuplicados(): boolean { return this.seccionActiva === 'duplicados'; }
   get esCola(): boolean { return this.seccionActiva === 'cola'; }
+  get esVentaSi(): boolean { return this.seccionActiva === 'ventasi'; }
+
+  // ── Venta SI ──────────────────────────────────────────────
+  casosVentaSi: CasoModel[] = [];
+  cargandoVentaSi = false;
+  ventaSiFiltroApellido = '';
+
+  get casosVentaSiFiltrado(): CasoModel[] {
+    const q = this.ventaSiFiltroApellido.trim().toLowerCase();
+    if (!q) return this.casosVentaSi;
+    return this.casosVentaSi.filter(c => (c.Trabajador || '').toLowerCase().includes(q));
+  }
 
   // ── Duplicados ────────────────────────────────────────────
   estadoDupli: 'idle' | 'buscando' | 'done' | 'error' = 'idle';
@@ -404,12 +429,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.dupliError = '';
     this.cdr.detectChanges();
     try {
-      // Paso 1: eliminar venta = si (columna BQ del Excel)
-      await this.fs.eliminarVentaSi((n) => {
-        this.dupliEliminados = n;
-        this.cdr.detectChanges();
-      });
-      // Paso 2: eliminar duplicados por nombre + fecha accidente
+      // Eliminar duplicados por nombre + fecha accidente
       const result = await this.fs.eliminarDuplicados((procesados) => {
         this.dupliEliminados = procesados;
         this.cdr.detectChanges();
@@ -940,11 +960,6 @@ export class DashboardAdmin implements OnInit, OnDestroy {
 
       // Limpieza automática
       this.estadoUpload = 'limpiando';
-
-      this.limpiezaPaso = 'Eliminando registros con Venta = SI...';
-      this.cdr.detectChanges();
-      const r1 = await this.fs.eliminarVentaSi();
-      this.limpiezaVentaSiEliminados = r1.eliminados;
 
       this.limpiezaPaso = 'Eliminando registros sin valor de Venta...';
       this.cdr.detectChanges();

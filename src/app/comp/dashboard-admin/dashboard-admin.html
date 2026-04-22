@@ -117,6 +117,15 @@
       – No Interesado
     </button>
 
+    <button (click)="setSeccion('ventasi')"
+      class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
+      [class.bg-white]="esVentaSi"
+      [class.text-emerald-600]="esVentaSi"
+      [class.bg-white/20]="!esVentaSi"
+      [class.text-white]="!esVentaSi">
+      💰 Venta SI
+    </button>
+
     <!-- Historial -->
     <button (click)="setSeccionHistorial()"
       class="px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow whitespace-nowrap shrink-0"
@@ -1298,6 +1307,114 @@
               Cargar otro archivo
             </button>
 
+          </div>
+        }
+
+      </div>
+    }
+
+    <!-- ══════════════════ VENTA SI ══════════════════ -->
+    @if (esVentaSi) {
+      <div class="flex flex-col gap-4">
+
+        <!-- Header -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl font-bold bg-emerald-50">
+            💰
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-white drop-shadow">Venta SI</h2>
+            <p class="text-xs text-blue-100">Total: <strong>{{ casosVentaSi.length }}</strong> casos</p>
+          </div>
+        </div>
+
+        <!-- Filtro -->
+        <div class="bg-white rounded-2xl shadow p-4 flex flex-wrap gap-3 items-center">
+          <span class="text-sm font-semibold text-gray-600">Filtrar:</span>
+          <div class="relative">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
+                 fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+            </svg>
+            <input [(ngModel)]="ventaSiFiltroApellido" type="text" placeholder="Buscar apellido..."
+              class="pl-9 pr-4 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 w-44"/>
+          </div>
+          <span class="ml-auto text-xs text-gray-400">{{ casosVentaSiFiltrado.length }} registro(s)</span>
+        </div>
+
+        @if (cargandoVentaSi) {
+          <div class="flex justify-center py-10">
+            <svg class="animate-spin h-7 w-7 text-blue-300" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          </div>
+        }
+
+        @if (!cargandoVentaSi && casosVentaSi.length === 0) {
+          <div class="bg-white/10 rounded-2xl p-10 text-center">
+            <p class="text-3xl mb-2">📭</p>
+            <p class="text-white font-semibold">No hay casos con Venta = SI.</p>
+          </div>
+        }
+
+        @if (!cargandoVentaSi && casosVentaSi.length > 0) {
+          <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100">
+              <h3 class="text-sm font-bold text-gray-600 uppercase tracking-wider">
+                💰 {{ casosVentaSiFiltrado.length }} caso(s) — Venta SI
+              </h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
+                    <th class="text-left px-4 py-3">Trabajador</th>
+                    <th class="text-left px-4 py-3">CUIL</th>
+                    <th class="text-left px-4 py-3">Empresa</th>
+                    <th class="text-center px-4 py-3">Días ILT</th>
+                    <th class="text-left px-4 py-3">Lesión</th>
+                    <th class="text-center px-4 py-3">Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (c of casosVentaSiFiltrado; track c.id) {
+                    <tr class="border-b border-gray-100 hover:bg-gray-50 transition cursor-pointer" (click)="casoDetalle = c">
+                      <td class="px-4 py-3 font-semibold text-gray-800">{{ c.Trabajador || '—' }}</td>
+                      <td class="px-4 py-3 font-mono text-xs text-gray-600">{{ c.CUIL || '—' }}</td>
+                      <td class="px-4 py-3 text-gray-600">{{ c.Emp_Denominacion || '—' }}</td>
+                      <td class="px-4 py-3 text-center font-bold text-emerald-600">{{ c.Dias_ILT || '—' }}</td>
+                      <td class="px-4 py-3 text-gray-600 text-xs">{{ c.Lesion_1 || '—' }}</td>
+                      <td class="px-4 py-3 text-center" (click)="$event.stopPropagation()">
+                        @if (c.emailEnviado || emailEnviado[c.id ?? c.CUIL ?? '']) {
+                          <span class="text-xs text-green-600 font-semibold">✓ Enviado</span>
+                        } @else if (c.emailErrorMsg || emailError[c.id ?? c.CUIL ?? '']) {
+                          <div class="flex flex-col items-center gap-0.5">
+                            <span class="text-xs text-red-500 font-semibold">Sin email</span>
+                            <button (click)="enviarEmail(c)"
+                              class="text-[10px] text-blue-500 underline hover:text-blue-700">reintentar</button>
+                          </div>
+                        } @else {
+                          <button (click)="enviarEmail(c)"
+                            [disabled]="enviandoEmail[c.id ?? c.CUIL ?? '']"
+                            class="inline-flex items-center gap-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+                            @if (enviandoEmail[c.id ?? c.CUIL ?? '']) {
+                              <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                              </svg>
+                            } @else {
+                              ✉
+                            }
+                            Enviar
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           </div>
         }
 
