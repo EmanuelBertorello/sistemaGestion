@@ -78,9 +78,9 @@ export class FirestoreService {
 
     // Query 1: ASGINADO == '' (sin asignar explícito)
     const [snap1, snap2] = await Promise.all([
-      getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''), limit(100))),
+      getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''), limit(2000))),
       // Query 2: docs viejos sin campo ASGINADO (campo ausente ≠ campo vacío en Firestore)
-      getDocs(query(ref, where('procesado', '==', false), limit(500))),
+      getDocs(query(ref, where('procesado', '==', false), limit(2000))),
     ]);
 
     // Buscar primero en los ASGINADO=='' y descartar venta=SI
