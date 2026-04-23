@@ -53,6 +53,7 @@ export interface CasoModel {
   Emp_Inicio_Afiliacion?: string;
 
   // Prestación / trámite
+  ART?: string;
   Registrado_Por?: string;
   Forma_Ingreso?: string;
   Tipo_Registro?: string;

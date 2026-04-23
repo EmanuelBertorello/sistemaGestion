@@ -1379,7 +1379,8 @@
                     <th class="text-left px-4 py-3">CUIL</th>
                     <th class="text-left px-4 py-3">Empresa</th>
                     <th class="text-center px-4 py-3">Días ILT</th>
-                    <th class="text-left px-4 py-3">Lesión</th>
+                    <th class="text-left px-4 py-3">Diagnóstico</th>
+                    <th class="text-left px-4 py-3">ART</th>
                     <th class="text-center px-4 py-3">Email</th>
                   </tr>
                 </thead>
@@ -1390,7 +1391,8 @@
                       <td class="px-4 py-3 font-mono text-xs text-gray-600">{{ c.CUIL || '—' }}</td>
                       <td class="px-4 py-3 text-gray-600">{{ c.Emp_Denominacion || '—' }}</td>
                       <td class="px-4 py-3 text-center font-bold text-emerald-600">{{ c.Dias_ILT || '—' }}</td>
-                      <td class="px-4 py-3 text-gray-600 text-xs">{{ c.Lesion_1 || '—' }}</td>
+                      <td class="px-4 py-3 text-gray-600 text-xs">{{ c.Diag_1 || '—' }}</td>
+                      <td class="px-4 py-3 text-gray-600 text-xs">{{ c.ART || '—' }}</td>
                       <td class="px-4 py-3 text-center" (click)="$event.stopPropagation()">
                         @if (c.emailEnviado || emailEnviado[c.id ?? c.CUIL ?? '']) {
                           <span class="text-xs text-green-600 font-semibold">✓ Enviado</span>
