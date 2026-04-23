@@ -75,16 +75,25 @@ export class FirestoreService {
 
   async getSiguienteCaso(): Promise<CasoModel | null> {
     const ref = collection(this.db, COL_CASOS);
-    // Solo casos sin procesar y sin asignar (ASGINADO vacío o no definido), excluyendo venta=SI
-    const q = query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''), limit(30));
-    const snap = await getDocs(q);
-    const libre = snap.docs.find(d => !this._esVentaSi(d.data()));
-    if (libre) return { id: libre.id, ...libre.data() } as CasoModel;
-    // Fallback: sin campo ASGINADO (registros viejos)
-    const q2 = query(ref, where('procesado', '==', false), limit(50));
-    const snap2 = await getDocs(q2);
-    const libre2 = snap2.docs.find(d => !d.data()['ASGINADO'] && !this._esVentaSi(d.data()));
+
+    // Query 1: ASGINADO == '' (sin asignar explícito)
+    const [snap1, snap2] = await Promise.all([
+      getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''), limit(100))),
+      // Query 2: docs viejos sin campo ASGINADO (campo ausente ≠ campo vacío en Firestore)
+      getDocs(query(ref, where('procesado', '==', false), limit(500))),
+    ]);
+
+    // Buscar primero en los ASGINADO=='' y descartar venta=SI
+    const libre1 = snap1.docs.find(d => !this._esVentaSi(d.data()));
+    if (libre1) return { id: libre1.id, ...libre1.data() } as CasoModel;
+
+    // Fallback: docs sin campo ASGINADO (registros subidos antes de normalización)
+    const libre2 = snap2.docs.find(d => {
+      const data = d.data();
+      return data['ASGINADO'] === undefined && !this._esVentaSi(data);
+    });
     if (libre2) return { id: libre2.id, ...libre2.data() } as CasoModel;
+
     return null;
   }
 
@@ -166,26 +175,35 @@ export class FirestoreService {
   async getCasoAsignadoA(apodo: string, emailFallback?: string): Promise<CasoModel | null> {
     const ref = collection(this.db, COL_CASOS);
 
-    // Query principal con el identificador recibido
-    const q = query(ref, where('procesado', '==', false), where('ASGINADO', '==', apodo), limit(1));
-    const snap = await getDocs(q);
-    if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() } as CasoModel;
+    // Construir set de variantes a probar (evitar duplicados)
+    const variantes = new Set<string>();
+    const addVariants = (s: string) => {
+      if (!s) return;
+      variantes.add(s.trim());
+      variantes.add(s.trim().toLowerCase());
+      variantes.add(s.trim().toUpperCase());
+      const cap = s.trim().charAt(0).toUpperCase() + s.trim().slice(1).toLowerCase();
+      variantes.add(cap);
+      // Si es email, agregar también el prefijo antes del @
+      if (s.includes('@')) {
+        const prefijo = s.split('@')[0].trim();
+        variantes.add(prefijo);
+        variantes.add(prefijo.toLowerCase());
+        const capPrefijo = prefijo.charAt(0).toUpperCase() + prefijo.slice(1).toLowerCase();
+        variantes.add(capPrefijo);
+      }
+    };
 
-    // Fallback: si el apodo es un email, probar también la parte antes del @
-    const esMail = apodo.includes('@');
-    if (esMail) {
-      const prefijo = apodo.split('@')[0];
-      const q2 = query(ref, where('procesado', '==', false), where('ASGINADO', '==', prefijo), limit(1));
-      const snap2 = await getDocs(q2);
-      if (!snap2.empty) return { id: snap2.docs[0].id, ...snap2.docs[0].data() } as CasoModel;
-    }
+    addVariants(apodo);
+    if (emailFallback) addVariants(emailFallback);
 
-    // Fallback: si se pasa un email distinto al apodo, probarlo también
-    if (emailFallback && emailFallback !== apodo) {
-      const q3 = query(ref, where('procesado', '==', false), where('ASGINADO', '==', emailFallback), limit(1));
-      const snap3 = await getDocs(q3);
-      if (!snap3.empty) return { id: snap3.docs[0].id, ...snap3.docs[0].data() } as CasoModel;
-    }
+    // Lanzar todas las queries en paralelo
+    const queries = Array.from(variantes).map(v =>
+      getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', v), limit(1)))
+    );
+    const snaps = await Promise.all(queries);
+    const hit = snaps.find(s => !s.empty);
+    if (hit) return { id: hit.docs[0].id, ...hit.docs[0].data() } as CasoModel;
 
     return null;
   }
@@ -480,6 +498,7 @@ export class FirestoreService {
         const ref = doc(collection(this.db, COL_CASOS));
         batch.set(ref, {
           ...fila,
+          ASGINADO: (fila['ASGINADO'] ?? '').toString().trim(),
           procesado: false,
           estado: '',
           procesadoPor: '',
@@ -637,10 +656,11 @@ export class FirestoreService {
 
     // Agrupar normalizando: si ASGINADO es un email → resolver al apodo
     const mapaLower = new Map<string, { display: string; cantidad: number }>();
+    let sinAsignar = 0;
     for (const d of snap.docs) {
+      if (this._esVentaSi(d.data())) continue;
       let raw = (d.data()['ASGINADO'] ?? '').toString().trim();
-      if (!raw) continue;
-      if (BASURA.has(raw.toLowerCase())) continue;
+      if (!raw || BASURA.has(raw.toLowerCase())) { sinAsignar++; continue; }
 
       // Si parece un email, intentar resolverlo al apodo
       if (raw.includes('@')) {
@@ -657,9 +677,11 @@ export class FirestoreService {
         mapaLower.set(key, { display: raw, cantidad: 1 });
       }
     }
-    return Array.from(mapaLower.values())
+    const resultado = Array.from(mapaLower.values())
       .map(v => ({ apodo: v.display, cantidad: v.cantidad }))
       .sort((a, b) => b.cantidad - a.cantidad);
+    if (sinAsignar > 0) resultado.push({ apodo: '— Sin asignar —', cantidad: sinAsignar });
+    return resultado;
   }
 
   /** Aplica las reglas a los docs sin ASGINADO basándose en Localidad_Ocurrencia */
