@@ -1679,12 +1679,28 @@
         <!-- Control -->
         <div class="bg-gray-50 rounded-xl p-4">
           <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Control</p>
-          <div class="grid grid-cols-2 gap-3 text-sm">
+          <div class="grid grid-cols-2 gap-3 text-sm mb-4">
             <div><p class="text-xs text-gray-400">Llamador</p><p class="font-semibold text-gray-800">{{ casoDetalle.ASGINADO || casoDetalle.procesadoPor || '—' }}</p></div>
             <div><p class="text-xs text-gray-400">Fecha procesado</p><p class="font-semibold text-gray-800 text-xs">
               {{ casoDetalle.procesadoTimestamp?.toDate ? (casoDetalle.procesadoTimestamp.toDate() | date:'dd/MM/yy HH:mm') : '—' }}
             </p></div>
           </div>
+          <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Cambiar estado</p>
+          <div class="flex flex-wrap gap-2">
+            <button (click)="adminCambiarEstado('acepto')" [disabled]="casoDetalleCambiando"
+              class="text-xs px-3 py-1.5 rounded-lg font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition">Acepto</button>
+            <button (click)="adminCambiarEstado('pendiente')" [disabled]="casoDetalleCambiando"
+              class="text-xs px-3 py-1.5 rounded-lg font-semibold bg-yellow-100 text-yellow-700 hover:bg-yellow-200 disabled:opacity-50 transition">Pendiente</button>
+            <button (click)="adminCambiarEstado('sincontacto')" [disabled]="casoDetalleCambiando"
+              class="text-xs px-3 py-1.5 rounded-lg font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 transition">Sin Contacto</button>
+            <button (click)="adminCambiarEstado('conabogado')" [disabled]="casoDetalleCambiando"
+              class="text-xs px-3 py-1.5 rounded-lg font-semibold bg-orange-100 text-orange-700 hover:bg-orange-200 disabled:opacity-50 transition">Con Abogado</button>
+            <button (click)="adminCambiarEstado('nointeresado')" [disabled]="casoDetalleCambiando"
+              class="text-xs px-3 py-1.5 rounded-lg font-semibold bg-gray-200 text-gray-600 hover:bg-gray-300 disabled:opacity-50 transition">No Interesado</button>
+          </div>
+          @if (casoDetalleMensaje) {
+            <p class="text-xs mt-2 font-medium" [class.text-green-600]="casoDetalleMensaje.startsWith('✓')" [class.text-red-500]="!casoDetalleMensaje.startsWith('✓')">{{ casoDetalleMensaje }}</p>
+          }
         </div>
 
       </div>

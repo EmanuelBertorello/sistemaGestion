@@ -7,7 +7,7 @@ import { FirestoreService, UploadResult, LlamadorStats, NoticiaItem } from '../.
 import { EmailService } from '../../services/email.service';
 import { CerteroService } from '../../services/certero.service';
 import { AnexoService } from '../../services/anexo.service';
-import { CasoModel } from '../dashboard-llamador/caso.model';
+import { CasoModel, EstadoCaso } from '../dashboard-llamador/caso.model';
 import * as XLSX from 'xlsx';
 
 type SeccionActiva = 'estadisticas' | 'acepto' | 'interesado' | 'sincontacto' | 'conabogado' | 'nointeresado' | 'cargar' | 'historial' | 'duplicados' | 'noticias' | 'cola' | 'ventasi';
@@ -78,6 +78,8 @@ export class DashboardAdmin implements OnInit, OnDestroy {
 
   // Caso detalle (al hacer click en una fila)
   casoDetalle: CasoModel | null = null;
+  casoDetalleCambiando = false;
+  casoDetalleMensaje = '';
 
   llamadores: LlamadorStats[] = [];
   cargandoStats = false;
@@ -832,6 +834,29 @@ export class DashboardAdmin implements OnInit, OnDestroy {
       nointeresado: 'bg-gray-100 text-gray-600',
     };
     return map[e] ?? 'bg-gray-100 text-gray-500';
+  }
+
+  async adminCambiarEstado(estado: EstadoCaso): Promise<void> {
+    if (!this.casoDetalle?.id || this.casoDetalleCambiando) return;
+    this.casoDetalleCambiando = true;
+    this.casoDetalleMensaje = '';
+    try {
+      await this.fs.cambiarEstadoCaso(this.casoDetalle.id, estado, 'admin', 'Admin', this.casoDetalle);
+      this.casoDetalle = { ...this.casoDetalle, estado };
+      this.casoDetalleMensaje = '✓ Estado actualizado';
+      // Refrescar lista si está en historial
+      if (this.seccionActiva !== 'estadisticas' && this.seccionActiva !== 'cargar' && this.seccionActiva !== 'ventasi' && this.seccionActiva !== 'cola') {
+        this.casosEstado = this.casosEstado.map(c => c.id === this.casoDetalle!.id ? { ...c, estado } : c);
+      }
+      if (this.seccionActiva === 'historial') {
+        this.historial = this.historial.map(c => c.id === this.casoDetalle!.id ? { ...c, estado } : c);
+      }
+    } catch {
+      this.casoDetalleMensaje = 'Error al cambiar estado';
+    } finally {
+      this.casoDetalleCambiando = false;
+      this.cdr.detectChanges();
+    }
   }
 
   // ── Excel / Upload ────────────────────────────────────────

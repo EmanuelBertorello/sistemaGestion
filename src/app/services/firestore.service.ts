@@ -73,26 +73,55 @@ export class FirestoreService {
     return val === 'si' || val === 'sí';
   }
 
-  async getSiguienteCaso(): Promise<CasoModel | null> {
+  async getSiguienteCaso(apodoUsuario?: string, emailUsuario?: string): Promise<CasoModel | null> {
     const ref = collection(this.db, COL_CASOS);
 
-    // Query 1: ASGINADO == '' (sin asignar explícito)
-    const [snap1, snap2] = await Promise.all([
-      getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''), limit(2000))),
-      // Query 2: docs viejos sin campo ASGINADO (campo ausente ≠ campo vacío en Firestore)
-      getDocs(query(ref, where('procesado', '==', false), limit(2000))),
-    ]);
+    // Construir variantes del usuario para buscar casos asignados a él + casos libres
+    const valoresBuscar = new Set<string>(['']);
+    const addVar = (s: string) => {
+      if (!s || s.length < 2) return;
+      valoresBuscar.add(s.trim());
+      valoresBuscar.add(s.trim().toLowerCase());
+      valoresBuscar.add(s.trim().toUpperCase());
+      valoresBuscar.add(s.trim().charAt(0).toUpperCase() + s.trim().slice(1).toLowerCase());
+      s.trim().split(/\s+/).forEach(w => {
+        const c = w.replace(/\.$/, '');
+        if (c.length >= 2) { valoresBuscar.add(c); valoresBuscar.add(c.toLowerCase()); valoresBuscar.add(c.toUpperCase()); valoresBuscar.add(c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()); }
+      });
+    };
+    if (apodoUsuario) addVar(apodoUsuario);
+    if (emailUsuario) { addVar(emailUsuario); addVar(emailUsuario.split('@')[0]); }
 
-    // Buscar primero en los ASGINADO=='' y descartar venta=SI
-    const libre1 = snap1.docs.find(d => !this._esVentaSi(d.data()));
-    if (libre1) return { id: libre1.id, ...libre1.data() } as CasoModel;
+    // Firestore 'in' soporta hasta 30 valores
+    const chunks: string[][] = [];
+    const arr = Array.from(valoresBuscar);
+    for (let i = 0; i < arr.length; i += 30) chunks.push(arr.slice(i, i + 30));
 
-    // Fallback: docs sin campo ASGINADO (registros subidos antes de normalización)
-    const libre2 = snap2.docs.find(d => {
-      const data = d.data();
-      return data['ASGINADO'] === undefined && !this._esVentaSi(data);
-    });
-    if (libre2) return { id: libre2.id, ...libre2.data() } as CasoModel;
+    const snaps = await Promise.all(
+      chunks.map(chunk => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', 'in', chunk), limit(500))))
+    );
+
+    // Prioridad: primero libres (ASGINADO==''), luego asignados al usuario
+    let libre: any = null;
+    let asignado: any = null;
+    for (const snap of snaps) {
+      for (const d of snap.docs) {
+        if (this._esVentaSi(d.data())) continue;
+        const asg = (d.data()['ASGINADO'] ?? '').toString();
+        if (!asg && !libre) libre = d;
+        else if (asg && !asignado) asignado = d;
+        if (libre && asignado) break;
+      }
+      if (libre) break;
+    }
+
+    const resultado = libre ?? asignado;
+    if (resultado) return { id: resultado.id, ...resultado.data() } as CasoModel;
+
+    // Fallback: docs sin campo ASGINADO (registros viejos)
+    const snapViejo = await getDocs(query(ref, where('procesado', '==', false), limit(500)));
+    const viejo = snapViejo.docs.find(d => d.data()['ASGINADO'] === undefined && !this._esVentaSi(d.data()));
+    if (viejo) return { id: viejo.id, ...viejo.data() } as CasoModel;
 
     return null;
   }
@@ -201,13 +230,22 @@ export class FirestoreService {
     addVariants(apodo);
     if (emailFallback) addVariants(emailFallback);
 
-    // Lanzar todas las queries en paralelo
+    // Lanzar todas las queries en paralelo (exact match)
     const queries = Array.from(variantes).map(v =>
       getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', v), limit(1)))
     );
     const snaps = await Promise.all(queries);
     const hit = snaps.find(s => !s.empty);
     if (hit) return { id: hit.docs[0].id, ...hit.docs[0].data() } as CasoModel;
+
+    // Fallback: scan client-side — ASGINADO puede ser email o variante no cubierta
+    const tokens = Array.from(variantes).map(v => v.toLowerCase()).filter(v => v.length > 2);
+    const scanSnap = await getDocs(query(ref, where('procesado', '==', false), limit(2000)));
+    const fuzzy = scanSnap.docs.find(d => {
+      const a = (d.data()['ASGINADO'] ?? '').toString().toLowerCase().trim();
+      return a && tokens.some(t => a.includes(t) || t.includes(a)) && !this._esVentaSi(d.data());
+    });
+    if (fuzzy) return { id: fuzzy.id, ...fuzzy.data() } as CasoModel;
 
     return null;
   }
@@ -379,30 +417,46 @@ export class FirestoreService {
   async getHistorialPor(email: string, apodo?: string): Promise<CasoModel[]> {
     const ref = collection(this.db, COL_CASOS);
     const apodoEfectivo = apodo && apodo !== email ? apodo : email.split('@')[0];
+    const emailPrefix = email.split('@')[0];
 
-    // Query 1: por procesadoPor (casos donde el llamador marcó el estado)
-    const q1 = getDocs(query(ref, where('procesadoPor', '==', email)));
-    // Query 2: por ASGINADO + procesado=true
-    const q2 = getDocs(query(ref, where('ASGINADO', '==', apodoEfectivo), where('procesado', '==', true)));
-    // Query 3: por ASGINADO sin restricción de procesado (captura casos movidos vía cambiarEstadoCaso)
-    const q3 = getDocs(query(ref, where('ASGINADO', '==', apodoEfectivo)));
-
-    const [snap1, snap2, snap3] = await Promise.all([q1, q2, q3]);
+    // Tokens para fuzzy match client-side
+    const tokens = new Set<string>();
+    const addTokens = (s: string) => {
+      if (!s || s.length < 2) return;
+      tokens.add(s.toLowerCase());
+      s.split(/\s+/).forEach(w => {
+        const clean = w.replace(/\.$/, '').toLowerCase();
+        if (clean.length >= 2) tokens.add(clean);
+      });
+    };
+    addTokens(apodoEfectivo);
+    addTokens(email);
+    addTokens(emailPrefix);
 
     const ESTADOS_VALIDOS = new Set(['acepto', 'pendiente', 'interesado', 'nocontesto', 'sincontacto', 'conabogado', 'nointeresado']);
 
+    // Scan ALL casos con estado válido (procesado true o false — cambiarEstadoCaso no fuerza procesado=true)
+    const [snapTrue, snapFalse] = await Promise.all([
+      getDocs(query(ref, where('procesado', '==', true))),
+      getDocs(query(ref, where('procesado', '==', false))),
+    ]);
+
     const seen = new Set<string>();
     const casos: CasoModel[] = [];
-    for (const snap of [snap1, snap2, snap3]) {
-      for (const d of snap.docs) {
-        if (!seen.has(d.id)) {
-          const data = d.data() as any;
-          // Solo incluir si tiene un estado válido (descartar casos en cola sin procesar)
-          if (ESTADOS_VALIDOS.has(data['estado'])) {
-            seen.add(d.id);
-            casos.push({ id: d.id, ...data } as CasoModel);
-          }
-        }
+    for (const d of [...snapTrue.docs, ...snapFalse.docs]) {
+      if (seen.has(d.id)) continue;
+      const data = d.data() as any;
+      if (!ESTADOS_VALIDOS.has(data['estado'])) continue;
+
+      const asginado = (data['ASGINADO'] ?? '').toString().toLowerCase();
+      const procesadoPor = (data['procesadoPor'] ?? '').toString().toLowerCase();
+
+      const matchAsginado = asginado && [...tokens].some(t => asginado.includes(t) || t.includes(asginado));
+      const matchProcesadoPor = procesadoPor === email.toLowerCase() || procesadoPor.includes(emailPrefix.toLowerCase());
+
+      if (matchAsginado || matchProcesadoPor) {
+        seen.add(d.id);
+        casos.push({ id: d.id, ...data } as CasoModel);
       }
     }
 
@@ -759,7 +813,7 @@ export class FirestoreService {
 
   async getCantidadEnCola(): Promise<number> {
     const ref = collection(this.db, COL_CASOS);
-    const snap = await getDocs(query(ref, where('procesado', '==', false)));
+    const snap = await getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', '')));
     return snap.docs.filter(d => !this._esVentaSi(d.data())).length;
   }
 

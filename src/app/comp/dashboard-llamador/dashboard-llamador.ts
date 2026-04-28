@@ -106,7 +106,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   ];
 
   constructor(
-    private auth: AuthService,
+    public auth: AuthService,
     private firestoreService: FirestoreService,
     private certero: CerteroService,
     private anexo: AnexoService,
@@ -164,7 +164,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
 
   get pendientesCount(): number { return this.pendientes.length; }
 
-  get limitePendientesAlcanzado(): boolean { return this.pendientesCount >= this.limitePendientes; }
+  get limitePendientesAlcanzado(): boolean { return false; }
 
   get aceptos(): CasoModel[] {
     return this.historial.filter(c => c.estado === 'acepto');
@@ -222,8 +222,10 @@ export class DashboardLlamador implements OnInit, OnDestroy {
         return;
       }
       try {
-        const siguiente = await this.firestoreService.getSiguienteCaso();
+        const identificador = this.apodoUsuario || this.auth.getCurrentEmail();
+        const siguiente = await this.firestoreService.getSiguienteCaso(this.apodoUsuario, this.auth.getCurrentEmail());
         if (siguiente) {
+          if (siguiente.id) await this.firestoreService.reservarCaso(siguiente.id, identificador);
           this.caso = siguiente;
           this.sinDatos = false;
           this.detenerPolling();
@@ -262,17 +264,18 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       }
     }
 
-    const siguiente = await this.firestoreService.getSiguienteCaso();
+    const siguiente = await this.firestoreService.getSiguienteCaso(this.apodoUsuario, this.auth.getCurrentEmail());
     if (siguiente) {
       if (siguiente.id) {
         await this.firestoreService.reservarCaso(siguiente.id, identificador);
       }
       this.caso = siguiente;
       this.cargarSumario(siguiente.CUIL);
-    } else {
-      this.caso = null;
-      this.sinDatos = true;
+      return;
     }
+
+    this.caso = null;
+    this.sinDatos = true;
   }
 
   async buscarContactoRelacion(cuil: string): Promise<void> {

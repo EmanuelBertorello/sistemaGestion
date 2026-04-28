@@ -281,15 +281,10 @@
 
       <!-- Fila 2: acciones + límite -->
       <div class="flex items-center gap-2 flex-wrap">
-        @if (limitePendientesAlcanzado) {
-          <span class="text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg font-medium">
-            ⚠ Límite ({{ pendientesCount }}/{{ limitePendientes }})
-          </span>
-        }
         <button (click)="solicitarDatoNuevo()"
-          [style.cursor]="(!estadoActivo || !caso || buscando || limitePendientesAlcanzado) ? 'not-allowed' : 'pointer'"
-          [style.opacity]="(!estadoActivo || !caso || buscando || limitePendientesAlcanzado) ? '0.5' : '1'"
-          [style.pointer-events]="(!estadoActivo || !caso || buscando || limitePendientesAlcanzado) ? 'none' : 'auto'"
+          [style.cursor]="(!estadoActivo || !caso || buscando) ? 'not-allowed' : 'pointer'"
+          [style.opacity]="(!estadoActivo || !caso || buscando) ? '0.5' : '1'"
+          [style.pointer-events]="(!estadoActivo || !caso || buscando) ? 'none' : 'auto'"
           class="text-xs sm:text-sm px-3 sm:px-4 py-2 rounded shadow transition flex items-center gap-2 bg-white border border-gray-200 text-gray-700">
           @if (buscando) {
             <svg class="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
@@ -379,6 +374,11 @@
             <p class="text-sm text-gray-400 mt-2">
               No quedan casos sin procesar en la base de datos. Contactá al administrador para cargar nuevos datos.
             </p>
+            <div class="mt-4 text-left bg-gray-50 rounded-xl p-4 text-xs text-gray-500 font-mono break-all">
+              <p><strong>email:</strong> {{ auth.getCurrentEmail() }}</p>
+              <p><strong>apodo:</strong> {{ apodoUsuario }}</p>
+              <p><strong>identificador:</strong> {{ apodoUsuario || auth.getCurrentEmail() }}</p>
+            </div>
           </div>
         }
 
@@ -769,13 +769,6 @@
       <!-- ══════════ PENDIENTES ══════════ -->
       @if (seccionActiva === 'pendientes') {
 
-        @if (limitePendientesAlcanzado) {
-          <div class="bg-red-100 border border-red-300 rounded-xl px-5 py-3 mb-4 flex items-center gap-3">
-            <span class="text-red-600 font-bold text-lg">⚠</span>
-            <p class="text-red-700 text-sm font-medium">Alcanzaste el límite de {{ limitePendientes }} pendientes. Cambiá el estado de algunos casos para poder solicitar nuevos datos.</p>
-          </div>
-        }
-
         @if (pendientesCount === 0) {
           <div class="bg-white/10 rounded-2xl p-12 text-center">
             <p class="text-4xl mb-3">⏳</p>
@@ -787,10 +780,8 @@
           <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 class="text-sm font-bold text-gray-600 uppercase tracking-wider">⏳ Pendientes</h3>
-              <span class="text-xs px-3 py-1 rounded-full font-medium"
-                [class.bg-red-100]="limitePendientesAlcanzado" [class.text-red-700]="limitePendientesAlcanzado"
-                [class.bg-yellow-100]="!limitePendientesAlcanzado" [class.text-yellow-700]="!limitePendientesAlcanzado">
-                {{ pendientesCount }} / {{ limitePendientes }} casos
+              <span class="text-xs px-3 py-1 rounded-full font-medium bg-yellow-100 text-yellow-700">
+                {{ pendientesCount }} casos
               </span>
             </div>
             <div class="overflow-x-auto">
