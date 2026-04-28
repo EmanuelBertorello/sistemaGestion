@@ -368,6 +368,10 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   limitesGuardando: Record<string, boolean> = {};
   limitesMensaje: Record<string, string> = {};
 
+  // Liberar casos por llamador
+  liberandoApodo: Record<string, boolean> = {};
+  liberadosMensaje: Record<string, string> = {};
+
   async vaciarBDMadre() {
     this.estadoVaciar = 'borrando';
     this.vaciarEliminados = 0;
@@ -1044,6 +1048,22 @@ export class DashboardAdmin implements OnInit, OnDestroy {
       this.limitesMensaje[apodo] = 'Error al guardar';
     } finally {
       this.limitesGuardando[apodo] = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async liberarCasosApodo(apodo: string): Promise<void> {
+    this.liberandoApodo[apodo] = true;
+    this.liberadosMensaje[apodo] = '';
+    this.cdr.detectChanges();
+    try {
+      const n = await this.fs.liberarTodosCasosDeApodo(apodo);
+      this.liberadosMensaje[apodo] = `✓ ${n} liberados`;
+      await this.cargarDatosCola();
+    } catch {
+      this.liberadosMensaje[apodo] = 'Error';
+    } finally {
+      this.liberandoApodo[apodo] = false;
       this.cdr.detectChanges();
     }
   }

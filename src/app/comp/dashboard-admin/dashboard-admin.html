@@ -965,6 +965,17 @@
                       <span class="text-xs text-green-600">{{ limitesMensaje[c.apodo] }}</span>
                     }
                   </div>
+                  <!-- Liberar todos los casos de este llamador -->
+                  @if (c.apodo !== '— Sin asignar —') {
+                    <button (click)="liberarCasosApodo(c.apodo)"
+                      [disabled]="liberandoApodo[c.apodo]"
+                      class="ml-auto text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
+                      {{ liberandoApodo[c.apodo] ? '...' : 'Liberar' }}
+                    </button>
+                    @if (liberadosMensaje[c.apodo]) {
+                      <span class="text-xs text-green-600">{{ liberadosMensaje[c.apodo] }}</span>
+                    }
+                  }
                 </div>
               }
             </div>

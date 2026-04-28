@@ -177,21 +177,25 @@ export class FirestoreService {
 
     // Construir set de variantes a probar (evitar duplicados)
     const variantes = new Set<string>();
+    const addToken = (s: string) => {
+      if (!s) return;
+      variantes.add(s);
+      variantes.add(s.toLowerCase());
+      variantes.add(s.toUpperCase());
+      variantes.add(s.charAt(0).toUpperCase() + s.slice(1).toLowerCase());
+    };
+
     const addVariants = (s: string) => {
       if (!s) return;
-      variantes.add(s.trim());
-      variantes.add(s.trim().toLowerCase());
-      variantes.add(s.trim().toUpperCase());
-      const cap = s.trim().charAt(0).toUpperCase() + s.trim().slice(1).toLowerCase();
-      variantes.add(cap);
-      // Si es email, agregar también el prefijo antes del @
-      if (s.includes('@')) {
-        const prefijo = s.split('@')[0].trim();
-        variantes.add(prefijo);
-        variantes.add(prefijo.toLowerCase());
-        const capPrefijo = prefijo.charAt(0).toUpperCase() + prefijo.slice(1).toLowerCase();
-        variantes.add(capPrefijo);
+      const t = s.trim();
+      addToken(t);
+      // Si es email, probar prefijo antes del @
+      if (t.includes('@')) {
+        const prefijo = t.split('@')[0].trim();
+        addToken(prefijo);
       }
+      // Probar cada palabra del apodo por separado (ej: 'Dr. PANGARO' → 'Dr.', 'PANGARO')
+      t.split(/\s+/).forEach(word => { if (word.length > 1) addToken(word.replace(/\.$/, '')); });
     };
 
     addVariants(apodo);
@@ -210,6 +214,23 @@ export class FirestoreService {
 
   async reservarCaso(id: string, apodo: string): Promise<void> {
     await updateDoc(doc(this.db, COL_CASOS, id), { ASGINADO: apodo });
+  }
+
+  async liberarTodosCasosDeApodo(apodo: string): Promise<number> {
+    const ref = collection(this.db, COL_CASOS);
+    const variantes = [apodo, apodo.toLowerCase(), apodo.toUpperCase(),
+      apodo.charAt(0).toUpperCase() + apodo.slice(1).toLowerCase()];
+    const snaps = await Promise.all(
+      [...new Set(variantes)].map(v => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', v))))
+    );
+    const ids = [...new Set(snaps.flatMap(s => s.docs.map(d => d.id)))];
+    const chunkSize = 499;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const batch = writeBatch(this.db);
+      ids.slice(i, i + chunkSize).forEach(id => batch.update(doc(this.db, COL_CASOS, id), { ASGINADO: '' }));
+      await batch.commit();
+    }
+    return ids.length;
   }
 
   async liberarCaso(id: string): Promise<void> {
