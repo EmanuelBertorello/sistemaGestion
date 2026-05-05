@@ -1630,11 +1630,13 @@
           <p class="text-xs font-bold text-orange-600 uppercase tracking-wider mb-3">Accidente</p>
           <div class="grid grid-cols-2 gap-3 text-sm">
             <div><p class="text-xs text-gray-400">Tipo</p><p class="font-semibold text-gray-800">{{ casoDetalle.Tipo_Accidente || '—' }}</p></div>
-            <div><p class="text-xs text-gray-400">Fecha</p><p class="font-semibold text-gray-800">{{ casoDetalle.Fecha_Accidente || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">Fecha</p><p class="font-semibold text-gray-800">{{ formatFecha(casoDetalle.Fecha_Accidente) }}</p></div>
             <div><p class="text-xs text-gray-400">Días ILT</p><p class="font-bold text-orange-600 text-lg">{{ casoDetalle.Dias_ILT || '—' }}</p></div>
             <div><p class="text-xs text-gray-400">Zona</p><p class="font-semibold text-gray-800">{{ casoDetalle.zona || casoDetalle.Zona_2 || '—' }}</p></div>
             <div class="col-span-2"><p class="text-xs text-gray-400">Lesión</p><p class="font-semibold text-gray-800">{{ casoDetalle.Lesion_1 || '—' }}</p></div>
             <div class="col-span-2"><p class="text-xs text-gray-400">Diagnóstico</p><p class="font-semibold text-gray-800">{{ casoDetalle.Diag_1 || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">ART</p><p class="font-semibold text-gray-800">{{ casoDetalle.ART || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">Ingreso Base (IBM)</p><p class="font-semibold text-gray-800">{{ casoDetalle.Ingreso_Base || '—' }}</p></div>
           </div>
         </div>
 

@@ -170,6 +170,20 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     return this.historial.filter(c => c.estado === 'acepto');
   }
 
+  formatFecha(val: any): string {
+    if (!val && val !== 0) return '—';
+    const n = typeof val === 'number' ? val : Number(val);
+    if (!isNaN(n) && n > 1000 && n < 100000) {
+      const d = new Date((n - 25569) * 86400 * 1000);
+      if (!isNaN(d.getTime())) {
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+        return `${dd}/${mm}/${d.getUTCFullYear()}`;
+      }
+    }
+    return String(val);
+  }
+
   private esPendiente(estado: string): boolean {
     return estado === 'pendiente' || estado === 'interesado' || estado === 'nocontesto';
   }
@@ -217,10 +231,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   private iniciarPolling() {
     if (this.pollingInterval) return;
     this.pollingInterval = setInterval(async () => {
-      if (this.buscando || this.caso) {
-        this.detenerPolling();
-        return;
-      }
+      if (this.buscando || this.caso) { this.detenerPolling(); return; }
       try {
         const identificador = this.apodoUsuario || this.auth.getCurrentEmail();
         const siguiente = await this.firestoreService.getSiguienteCaso(this.apodoUsuario, this.auth.getCurrentEmail());
@@ -229,12 +240,11 @@ export class DashboardLlamador implements OnInit, OnDestroy {
           this.caso = siguiente;
           this.sinDatos = false;
           this.detenerPolling();
+          this.cargarSumario(siguiente.CUIL);
           this.cdr.detectChanges();
         }
-      } catch (e) {
-        // silencioso
-      }
-    }, 2000);
+      } catch { /* silencioso */ }
+    }, 8000); // cada 8s — getSiguienteCaso es pesado, no martillar Firestore
   }
 
   private detenerPolling() {
@@ -276,7 +286,11 @@ export class DashboardLlamador implements OnInit, OnDestroy {
 
     this.caso = null;
     this.sinDatos = true;
+    this.firestoreService.debugCola(this.apodoUsuario, this.auth.getCurrentEmail())
+      .then((info: { libres: number; asignados: number; variantesUsadas: string[] }) => { this.debugInfo = info; this.cdr.detectChanges(); });
   }
+
+  debugInfo: { libres: number; asignados: number; variantesUsadas: string[] } | null = null;
 
   async buscarContactoRelacion(cuil: string): Promise<void> {
     if (this.cargandoRelacion[cuil]) return;
@@ -747,6 +761,14 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   abrirWhatsappVinculo(documento: string): void {
     const telefono = documento.replace(/\D/g, '');
     window.open(`https://wa.me/54${telefono}`, 'wa_llamador');
+  }
+
+  async reintentar(): Promise<void> {
+    this.sinDatos = false;
+    this.detenerPolling();
+    await this.cargarSiguienteCaso(true);
+    if (this.sinDatos) this.iniciarPolling();
+    this.cdr.detectChanges();
   }
 
   async solicitarDatoNuevo(): Promise<void> {

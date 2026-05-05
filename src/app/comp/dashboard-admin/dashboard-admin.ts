@@ -1,4 +1,4 @@
-import { Component, NgZone, OnInit, OnDestroy, ChangeDetectorRef, PLATFORM_ID, Inject } from '@angular/core';
+import { Component, NgZone, OnInit, OnDestroy, ChangeDetectorRef, PLATFORM_ID, Inject, HostListener } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DatePipe, isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
@@ -141,23 +141,26 @@ export class DashboardAdmin implements OnInit, OnDestroy {
 
   // ─────────────────────────────────────────────────────────
 
+  @HostListener('document:keydown.escape')
+  onEscape() { this.casoDetalle = null; }
+
   async ngOnInit() {
     if (!isPlatformBrowser(this.platformId)) return;
     await this.cargarEstadisticas();
     this.fs.getCantidadEnCola().then(n => this.zone.run(() => { this.casosEnCola = n; }));
     this.colaInterval = setInterval(() => {
       this.fs.getCantidadEnCola().then(n => this.zone.run(() => { this.casosEnCola = n; this.cdr.detectChanges(); }));
-    }, 500);
+    }, 15000); // cada 15s — no martillar Firestore
 
-    // Carga inicial
+    // Carga inicial historial
     this.fs.getHistorialCompleto().then(h => {
       this.zone.run(() => { this.historial = h; this.cargandoHistorial = false; this.cdr.detectChanges(); });
     });
-    // Polling cada 500ms
+    // Polling historial cada 30s
     this.historialInterval = setInterval(async () => {
       const h = await this.fs.getHistorialCompleto();
       this.zone.run(() => { this.historial = h; this.cdr.detectChanges(); });
-    }, 500);
+    }, 30000);
     this.unsubNotif = this.fs.escucharNotificacionesAcepto(this.adminInitMs, notifs => {
       this.zone.run(() => {
         if (notifs.length > this.prevNotifCount) {
@@ -817,6 +820,20 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  formatFecha(val: any): string {
+    if (!val && val !== 0) return '—';
+    const n = typeof val === 'number' ? val : Number(val);
+    if (!isNaN(n) && n > 1000 && n < 100000) {
+      const d = new Date((n - 25569) * 86400 * 1000);
+      if (!isNaN(d.getTime())) {
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+        return `${dd}/${mm}/${d.getUTCFullYear()}`;
+      }
+    }
+    return String(val) || '—';
+  }
+
   labelEstado(e: string): string {
     const map: Record<string, string> = {
       acepto: 'Acepto', interesado: 'Interesado', sincontacto: 'Sin Contacto',
@@ -918,11 +935,36 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     69: 'ASGINADO',
   };
 
+  private excelSerialAFecha(serial: number): string {
+    // Excel serial: días desde 1/1/1900 (con bug año bisiesto 1900)
+    // 25569 = días entre epoch Excel y epoch Unix (1/1/1970)
+    const ms = (serial - 25569) * 86400 * 1000;
+    const d = new Date(ms);
+    if (isNaN(d.getTime())) return String(serial);
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const yyyy = d.getUTCFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
+  private readonly CAMPOS_FECHA = new Set([
+    'Fecha_Accidente', 'Fecha_Alta_Medica', 'Fecha_Inicio_Inasistencia',
+    'Fecha_Inicio_Transitoriedad', 'Fecha_Cese_Transitoriedad',
+    'Fecha_Toma_Conocimiento', 'Fecha_Ingreso_Denuncia',
+    'Fecha_Finalizacion', 'Fecha_Rechazo', 'FechaNacimiento',
+  ]);
+
   private mapearFila(row: any[]): Record<string, any> {
     const obj: Record<string, any> = {};
     for (const [idxStr, campo] of Object.entries(this.EXCEL_COLS)) {
       const val = row[Number(idxStr)];
-      obj[campo] = (val === undefined || val === null) ? '' : String(val).trim();
+      if (val === undefined || val === null) { obj[campo] = ''; continue; }
+      // Convertir serial numérico de Excel a fecha DD/MM/YYYY
+      if (this.CAMPOS_FECHA.has(campo) && typeof val === 'number' && val > 1000) {
+        obj[campo] = this.excelSerialAFecha(val);
+      } else {
+        obj[campo] = String(val).trim();
+      }
     }
     return obj;
   }

@@ -73,55 +73,55 @@ export class FirestoreService {
     return val === 'si' || val === 'sí';
   }
 
+  private _buildVariantes(apodo?: string, email?: string): Set<string> {
+    const v = new Set<string>();
+    const add = (s: string) => {
+      if (!s || s.length < 2) return;
+      const t = s.trim();
+      v.add(t);
+      v.add(t.toLowerCase());
+      v.add(t.toUpperCase());
+      v.add(t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
+      // cada palabra por separado
+      t.split(/\s+/).forEach(w => {
+        const c = w.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ]/g, '');
+        if (c.length >= 2) { v.add(c); v.add(c.toLowerCase()); v.add(c.toUpperCase()); v.add(c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()); }
+      });
+      // si es email, también el prefijo
+      if (t.includes('@')) add(t.split('@')[0]);
+    };
+    if (apodo) add(apodo);
+    if (email) add(email);
+    return v;
+  }
+
   async getSiguienteCaso(apodoUsuario?: string, emailUsuario?: string): Promise<CasoModel | null> {
     const ref = collection(this.db, COL_CASOS);
 
-    // Construir variantes del usuario para buscar casos asignados a él + casos libres
-    const valoresBuscar = new Set<string>(['']);
-    const addVar = (s: string) => {
-      if (!s || s.length < 2) return;
-      valoresBuscar.add(s.trim());
-      valoresBuscar.add(s.trim().toLowerCase());
-      valoresBuscar.add(s.trim().toUpperCase());
-      valoresBuscar.add(s.trim().charAt(0).toUpperCase() + s.trim().slice(1).toLowerCase());
-      s.trim().split(/\s+/).forEach(w => {
-        const c = w.replace(/\.$/, '');
-        if (c.length >= 2) { valoresBuscar.add(c); valoresBuscar.add(c.toLowerCase()); valoresBuscar.add(c.toUpperCase()); valoresBuscar.add(c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()); }
-      });
-    };
-    if (apodoUsuario) addVar(apodoUsuario);
-    if (emailUsuario) { addVar(emailUsuario); addVar(emailUsuario.split('@')[0]); }
+    // PASO 1: casos libres (ASGINADO == '') con limit suficiente para filtrar ventaSI client-side
+    const snapLibre = await getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''), limit(2000)));
+    const libre = snapLibre.docs.find(d => !this._esVentaSi(d.data()));
+    if (libre) return { id: libre.id, ...libre.data() } as CasoModel;
 
-    // Firestore 'in' soporta hasta 30 valores
-    const chunks: string[][] = [];
-    const arr = Array.from(valoresBuscar);
-    for (let i = 0; i < arr.length; i += 30) chunks.push(arr.slice(i, i + 30));
-
-    const snaps = await Promise.all(
-      chunks.map(chunk => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', 'in', chunk), limit(500))))
-    );
-
-    // Prioridad: primero libres (ASGINADO==''), luego asignados al usuario
-    let libre: any = null;
-    let asignado: any = null;
-    for (const snap of snaps) {
-      for (const d of snap.docs) {
-        if (this._esVentaSi(d.data())) continue;
-        const asg = (d.data()['ASGINADO'] ?? '').toString();
-        if (!asg && !libre) libre = d;
-        else if (asg && !asignado) asignado = d;
-        if (libre && asignado) break;
+    // PASO 2: casos asignados específicamente a este usuario
+    if (apodoUsuario || emailUsuario) {
+      const variantes = this._buildVariantes(apodoUsuario, emailUsuario);
+      const arr = Array.from(variantes).filter(v => v.length >= 2);
+      const chunks: string[][] = [];
+      for (let i = 0; i < arr.length; i += 30) chunks.push(arr.slice(i, i + 30));
+      const snaps = await Promise.all(
+        chunks.map(ch => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', 'in', ch))))
+      );
+      for (const snap of snaps) {
+        const found = snap.docs.find(d => !this._esVentaSi(d.data()));
+        if (found) return { id: found.id, ...found.data() } as CasoModel;
       }
-      if (libre) break;
     }
 
-    const resultado = libre ?? asignado;
-    if (resultado) return { id: resultado.id, ...resultado.data() } as CasoModel;
-
-    // Fallback: docs sin campo ASGINADO (registros viejos)
-    const snapViejo = await getDocs(query(ref, where('procesado', '==', false), limit(500)));
-    const viejo = snapViejo.docs.find(d => d.data()['ASGINADO'] === undefined && !this._esVentaSi(d.data()));
-    if (viejo) return { id: viejo.id, ...viejo.data() } as CasoModel;
+    // PASO 3: fallback — registros viejos sin campo ASGINADO
+    const snapAll = await getDocs(query(ref, where('procesado', '==', false), limit(1000)));
+    const legacy = snapAll.docs.find(d => d.data()['ASGINADO'] === undefined && !this._esVentaSi(d.data()));
+    if (legacy) return { id: legacy.id, ...legacy.data() } as CasoModel;
 
     return null;
   }
@@ -203,50 +203,15 @@ export class FirestoreService {
 
   async getCasoAsignadoA(apodo: string, emailFallback?: string): Promise<CasoModel | null> {
     const ref = collection(this.db, COL_CASOS);
-
-    // Construir set de variantes a probar (evitar duplicados)
-    const variantes = new Set<string>();
-    const addToken = (s: string) => {
-      if (!s) return;
-      variantes.add(s);
-      variantes.add(s.toLowerCase());
-      variantes.add(s.toUpperCase());
-      variantes.add(s.charAt(0).toUpperCase() + s.slice(1).toLowerCase());
-    };
-
-    const addVariants = (s: string) => {
-      if (!s) return;
-      const t = s.trim();
-      addToken(t);
-      // Si es email, probar prefijo antes del @
-      if (t.includes('@')) {
-        const prefijo = t.split('@')[0].trim();
-        addToken(prefijo);
-      }
-      // Probar cada palabra del apodo por separado (ej: 'Dr. PANGARO' → 'Dr.', 'PANGARO')
-      t.split(/\s+/).forEach(word => { if (word.length > 1) addToken(word.replace(/\.$/, '')); });
-    };
-
-    addVariants(apodo);
-    if (emailFallback) addVariants(emailFallback);
-
-    // Lanzar todas las queries en paralelo (exact match)
-    const queries = Array.from(variantes).map(v =>
-      getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', v), limit(1)))
+    const variantes = this._buildVariantes(apodo, emailFallback);
+    const arr = Array.from(variantes).filter(v => v.length >= 2);
+    const chunks: string[][] = [];
+    for (let i = 0; i < arr.length; i += 30) chunks.push(arr.slice(i, i + 30));
+    const snaps = await Promise.all(
+      chunks.map(ch => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', 'in', ch), limit(1))))
     );
-    const snaps = await Promise.all(queries);
     const hit = snaps.find(s => !s.empty);
     if (hit) return { id: hit.docs[0].id, ...hit.docs[0].data() } as CasoModel;
-
-    // Fallback: scan client-side — ASGINADO puede ser email o variante no cubierta
-    const tokens = Array.from(variantes).map(v => v.toLowerCase()).filter(v => v.length > 2);
-    const scanSnap = await getDocs(query(ref, where('procesado', '==', false), limit(2000)));
-    const fuzzy = scanSnap.docs.find(d => {
-      const a = (d.data()['ASGINADO'] ?? '').toString().toLowerCase().trim();
-      return a && tokens.some(t => a.includes(t) || t.includes(a)) && !this._esVentaSi(d.data());
-    });
-    if (fuzzy) return { id: fuzzy.id, ...fuzzy.data() } as CasoModel;
-
     return null;
   }
 
@@ -278,24 +243,31 @@ export class FirestoreService {
   async eliminarDuplicados(onProgress?: (procesados: number, total: number) => void): Promise<{ eliminados: number }> {
     const ref = collection(this.db, COL_CASOS);
     const snap = await getDocs(ref);
+
+    // Clave primaria: CUIL (normalizado). Fallback: Trabajador||Fecha_Accidente
+    const claveDe = (data: any): string => {
+      const cuil = (data['CUIL'] || data['CUIL_Definitiva'] || '').toString().replace(/\D/g, '').trim();
+      if (cuil.length >= 10) return `cuil:${cuil}`;
+      const trabajador = (data['Trabajador'] || '').trim().toUpperCase();
+      const fecha = (data['Fecha_Accidente'] || '').trim();
+      return `nombre:${trabajador}||${fecha}`;
+    };
+
     const visto = new Map<string, string>(); // clave → id a conservar
     const aEliminar: string[] = [];
 
     for (const d of snap.docs) {
       const data = d.data();
-      const trabajador = (data['Trabajador'] || '').trim().toUpperCase();
-      const fecha = (data['Fecha_Accidente'] || '').trim();
-      if (!trabajador && !fecha) continue;
-      const clave = `${trabajador}||${fecha}`;
+      const clave = claveDe(data);
+      if (clave === 'cuil:' || clave === 'nombre:||') continue;
+
       if (visto.has(clave)) {
-        // Ya existe uno, este es duplicado — eliminar el de menor prioridad
-        // Si el existente ya está procesado, eliminar el nuevo; si no, eliminar el existente y conservar el procesado
         const idExistente = visto.get(clave)!;
-        const existenteSnap = snap.docs.find(x => x.id === idExistente);
-        const existenteProcesado = existenteSnap?.data()['procesado'] === true;
+        const existenteData = snap.docs.find(x => x.id === idExistente)?.data();
+        const existenteProcesado = existenteData?.['procesado'] === true;
         const actualProcesado = data['procesado'] === true;
         if (actualProcesado && !existenteProcesado) {
-          // Conservar el actual (procesado), eliminar el existente
+          // Conservar el procesado (actual), eliminar el sin procesar (existente)
           aEliminar.push(idExistente);
           visto.set(clave, d.id);
         } else {
@@ -809,6 +781,19 @@ export class FirestoreService {
     } else {
       await addDoc(collection(this.db, 'config_llamadores'), { apodo, limitePendientes });
     }
+  }
+
+  async debugCola(apodo: string, email: string): Promise<{ libres: number; asignados: number; variantesUsadas: string[] }> {
+    const ref = collection(this.db, COL_CASOS);
+    const variantes = this._buildVariantes(apodo, email);
+    const arr = Array.from(variantes).filter(v => v.length >= 2);
+    const [snapLibre, ...snapAsignados] = await Promise.all([
+      getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''), limit(10))),
+      ...arr.map(v => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', v), limit(10))))
+    ]);
+    const libres = snapLibre.docs.filter(d => !this._esVentaSi(d.data())).length;
+    const asignados = snapAsignados.reduce((sum, s) => sum + s.docs.filter(d => !this._esVentaSi(d.data())).length, 0);
+    return { libres, asignados, variantesUsadas: arr };
   }
 
   async getCantidadEnCola(): Promise<number> {

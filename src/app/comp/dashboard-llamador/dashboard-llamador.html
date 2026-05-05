@@ -374,6 +374,9 @@
             <p class="text-sm text-gray-400 mt-2">
               No quedan casos sin procesar en la base de datos. Contactá al administrador para cargar nuevos datos.
             </p>
+            <button (click)="reintentar()" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition">
+              Reintentar
+            </button>
             <div class="mt-4 text-left bg-gray-50 rounded-xl p-4 text-xs text-gray-500 font-mono break-all">
               <p><strong>email:</strong> {{ auth.getCurrentEmail() }}</p>
               <p><strong>apodo:</strong> {{ apodoUsuario }}</p>
@@ -424,7 +427,7 @@
                   </div>
                   <div class="bg-gray-50 rounded-xl p-3">
                     <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Fecha accidente</p>
-                    <p class="text-sm font-medium text-gray-700">{{ caso.Fecha_Accidente }}</p>
+                    <p class="text-sm font-medium text-gray-700">{{ formatFecha(caso.Fecha_Accidente) }}</p>
                   </div>
                   <div class="bg-gray-50 rounded-xl p-3">
                     <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Días ILT</p>
@@ -497,7 +500,12 @@
 
                   @if (sumario._noEncontrado) {
                     <div class="bg-gray-50 rounded-xl px-4 py-3 flex items-center gap-2 text-gray-400 text-sm">
-                      <span>⚠</span> Sin datos de contacto en Certero para este CUIL.
+                      <span>⚠</span>
+                      @if (sumario['_rateLimited']) {
+                        Límite de consultas Certero alcanzado. Esperá unos minutos.
+                      } @else {
+                        Sin datos de contacto en Certero para este CUIL.
+                      }
                     </div>
                   }
 
@@ -1300,7 +1308,7 @@
 
           <div class="bg-gray-50 rounded-xl p-3">
             <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Fecha accidente</p>
-            <p class="text-sm text-gray-700">{{ casoModal.Fecha_Accidente || '—' }}</p>
+            <p class="text-sm text-gray-700">{{ formatFecha(casoModal.Fecha_Accidente) }}</p>
           </div>
           <div class="bg-gray-50 rounded-xl p-3">
             <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Tipo accidente</p>

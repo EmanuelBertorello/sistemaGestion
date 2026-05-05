@@ -57,6 +57,7 @@ export interface SumarioCertero {
   domicilios?: DomicilioCertero[];
   relaciones?: RelacionCertero[];
   _noEncontrado?: boolean;
+  _rateLimited?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -81,37 +82,23 @@ export class CerteroService {
       const data = await firstValueFrom(
         this.http.get<SumarioCertero>(url, { headers: this.headers })
       );
-      console.log('[Certero] Respuesta OK:', data);
       return data;
     } catch (e: any) {
-      console.group('[Certero] ERROR en URL principal');
-      console.log('URL:', url);
-      console.log('Status:', e?.status);
-      console.log('Message:', e?.message);
-      console.log('Error completo:', e);
-      console.groupEnd();
+      const status = e?.status ?? 0;
+      // 429 = rate limit — no reintentar, empeora
+      if (status === 429) return { _noEncontrado: true, _rateLimited: true } as any;
+      if (status === 500 || status === 404) return { _noEncontrado: true };
 
-      if (e?.status === 500 || e?.status === 404) {
-        return { _noEncontrado: true };
-      }
-
-      // Intentar URL alternativa
-      const altUrl = `${this.altBase}/Sumario?cuitcuil=${cuil11}`;
-      console.log('[Certero] Reintentando con URL alternativa:', altUrl);
+      // Red u otro error — intentar URL alternativa
       try {
         const data2 = await firstValueFrom(
-          this.http.get<SumarioCertero>(altUrl, { headers: this.headers })
+          this.http.get<SumarioCertero>(`${this.altBase}/Sumario?cuitcuil=${cuil11}`, { headers: this.headers })
         );
-        console.log('[Certero] URL alternativa OK:', data2);
         return data2;
       } catch (e2: any) {
-        console.group('[Certero] ERROR también en URL alternativa');
-        console.log('URL alt:', altUrl);
-        console.log('Status:', e2?.status);
-        console.log('Message:', e2?.message);
-        console.log('Error completo:', e2);
-        console.groupEnd();
-        if (e2?.status === 500 || e2?.status === 404) return { _noEncontrado: true };
+        const s2 = e2?.status ?? 0;
+        if (s2 === 429) return { _noEncontrado: true, _rateLimited: true } as any;
+        if (s2 === 500 || s2 === 404) return { _noEncontrado: true };
         return null;
       }
     }
