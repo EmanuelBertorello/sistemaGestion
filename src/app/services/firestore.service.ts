@@ -95,12 +95,20 @@ export class FirestoreService {
     return v;
   }
 
-  async getSiguienteCaso(apodoUsuario?: string, emailUsuario?: string): Promise<CasoModel | null> {
+  async getSiguienteCaso(apodoUsuario?: string, emailUsuario?: string, perfil?: string): Promise<CasoModel | null> {
     const ref = collection(this.db, COL_CASOS);
 
-    // PASO 1: casos libres (ASGINADO == '') con limit suficiente para filtrar ventaSI client-side
-    const snapLibre = await getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''), limit(2000)));
-    const libre = snapLibre.docs.find(d => !this._esVentaSi(d.data()));
+    const matchPerfil = (data: any): boolean => {
+      if (!perfil) return true; // sin perfil → ve todo
+      const tc = (data['tipoCaso'] ?? '').toString().trim();
+      if (perfil === 'highticket') return tc === '1';
+      if (perfil === 'volumen') return tc === '0';
+      return true;
+    };
+
+    // PASO 1: casos libres (ASGINADO == '') — SIN limit porque hay muchos ventaSI mezclados
+    const snapLibre = await getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', '')));
+    const libre = snapLibre.docs.find(d => !this._esVentaSi(d.data()) && matchPerfil(d.data()));
     if (libre) return { id: libre.id, ...libre.data() } as CasoModel;
 
     // PASO 2: casos asignados específicamente a este usuario
@@ -113,14 +121,14 @@ export class FirestoreService {
         chunks.map(ch => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', 'in', ch))))
       );
       for (const snap of snaps) {
-        const found = snap.docs.find(d => !this._esVentaSi(d.data()));
+        const found = snap.docs.find(d => !this._esVentaSi(d.data()) && matchPerfil(d.data()));
         if (found) return { id: found.id, ...found.data() } as CasoModel;
       }
     }
 
     // PASO 3: fallback — registros viejos sin campo ASGINADO
     const snapAll = await getDocs(query(ref, where('procesado', '==', false), limit(1000)));
-    const legacy = snapAll.docs.find(d => d.data()['ASGINADO'] === undefined && !this._esVentaSi(d.data()));
+    const legacy = snapAll.docs.find(d => d.data()['ASGINADO'] === undefined && !this._esVentaSi(d.data()) && matchPerfil(d.data()));
     if (legacy) return { id: legacy.id, ...legacy.data() } as CasoModel;
 
     return null;
@@ -580,6 +588,24 @@ export class FirestoreService {
     return snap.docs.map(d => d.data() as UsuarioApp);
   }
 
+  async getTodosLlamadoresConPerfil(): Promise<Array<{ apodo: string; perfil: string; limitePendientes: number }>> {
+    const [usuariosSnap, configSnap] = await Promise.all([
+      getDocs(collection(this.db, COL_USUARIOS)),
+      getDocs(collection(this.db, 'config_llamadores')),
+    ]);
+    const configMap = new Map<string, any>();
+    configSnap.docs.forEach(d => configMap.set(d.data()['apodo'], d.data()));
+
+    return usuariosSnap.docs
+      .map(d => d.data() as any)
+      .filter(u => u.apodo && u.apodo.trim())
+      .map(u => {
+        const cfg = configMap.get(u.apodo) ?? {};
+        return { apodo: u.apodo, perfil: cfg.perfil ?? '', limitePendientes: cfg.limitePendientes ?? 35 };
+      })
+      .sort((a, b) => a.apodo.localeCompare(b.apodo));
+  }
+
   async actualizarApodo(uid: string, apodo: string): Promise<void> {
     await updateDoc(doc(this.db, COL_USUARIOS, uid), { apodo });
   }
@@ -761,15 +787,26 @@ export class FirestoreService {
 
   // ── Config por llamador ───────────────────────────────────
 
-  async getConfigLlamador(apodo: string): Promise<{ limitePendientes: number }> {
+  async getConfigLlamador(apodo: string): Promise<{ limitePendientes: number; perfil: string }> {
     const snap = await getDocs(
       query(collection(this.db, 'config_llamadores'), where('apodo', '==', apodo))
     );
     if (!snap.empty) {
       const data = snap.docs[0].data() as any;
-      return { limitePendientes: data.limitePendientes ?? 35 };
+      return { limitePendientes: data.limitePendientes ?? 35, perfil: data.perfil ?? '' };
     }
-    return { limitePendientes: 35 };
+    return { limitePendientes: 35, perfil: '' };
+  }
+
+  async setPerfilLlamador(apodo: string, perfil: string): Promise<void> {
+    const snap = await getDocs(
+      query(collection(this.db, 'config_llamadores'), where('apodo', '==', apodo))
+    );
+    if (!snap.empty) {
+      await updateDoc(snap.docs[0].ref, { perfil });
+    } else {
+      await addDoc(collection(this.db, 'config_llamadores'), { apodo, perfil, limitePendientes: 35 });
+    }
   }
 
   async setConfigLlamador(apodo: string, limitePendientes: number): Promise<void> {
@@ -788,12 +825,53 @@ export class FirestoreService {
     const variantes = this._buildVariantes(apodo, email);
     const arr = Array.from(variantes).filter(v => v.length >= 2);
     const [snapLibre, ...snapAsignados] = await Promise.all([
-      getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''), limit(10))),
+      getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', ''))),
       ...arr.map(v => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', v), limit(10))))
     ]);
     const libres = snapLibre.docs.filter(d => !this._esVentaSi(d.data())).length;
     const asignados = snapAsignados.reduce((sum, s) => sum + s.docs.filter(d => !this._esVentaSi(d.data())).length, 0);
     return { libres, asignados, variantesUsadas: arr };
+  }
+
+  async repararAsginadoTipoCaso(): Promise<number> {
+    const ref = collection(this.db, COL_CASOS);
+    const [snap0, snap1] = await Promise.all([
+      getDocs(query(ref, where('ASGINADO', '==', '0'))),
+      getDocs(query(ref, where('ASGINADO', '==', '1'))),
+    ]);
+    const todos = [...snap0.docs, ...snap1.docs];
+    const chunkSize = 499;
+    for (let i = 0; i < todos.length; i += chunkSize) {
+      const batch = writeBatch(this.db);
+      todos.slice(i, i + chunkSize).forEach(d => {
+        const tipoCaso = d.data()['ASGINADO']; // '0' o '1'
+        batch.update(d.ref, { ASGINADO: '', tipoCaso });
+      });
+      await batch.commit();
+    }
+    return todos.length;
+  }
+
+  async vaciarCola(onProgress?: (n: number) => void): Promise<{ eliminados: number }> {
+    const ref = collection(this.db, COL_CASOS);
+    const snap = await getDocs(query(ref, where('procesado', '==', false)));
+    const ids = snap.docs.map(d => d.id);
+    let eliminados = 0;
+    const chunkSize = 499;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const batch = writeBatch(this.db);
+      ids.slice(i, i + chunkSize).forEach(id => batch.delete(doc(this.db, COL_CASOS, id)));
+      await batch.commit();
+      eliminados += Math.min(chunkSize, ids.length - i);
+      onProgress?.(eliminados);
+    }
+    return { eliminados };
+  }
+
+  async getCasosEnColaCompleto(): Promise<CasoModel[]> {
+    const ref = collection(this.db, COL_CASOS);
+    const snap = await getDocs(query(ref, where('procesado', '==', false)));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as CasoModel));
   }
 
   async getCantidadEnCola(): Promise<number> {

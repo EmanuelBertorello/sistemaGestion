@@ -47,6 +47,14 @@
           <span class="text-white/60 text-[10px] uppercase tracking-wider leading-none">En cola</span>
           <span class="text-white font-bold text-lg leading-tight">{{ casosEnCola }}</span>
         </div>
+        <button (click)="descargarExcelCola()" [disabled]="descargandoCola"
+          class="bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+          {{ descargandoCola ? '...' : '⬇ Excel Cola' }}
+        </button>
+        <button (click)="vaciarCola()" [disabled]="vaciandoCola"
+          class="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+          {{ vaciandoCola ? 'Borrando ' + vaciarColaEliminados + '...' : '🗑 Vaciar Cola' }}
+        </button>
         <button (click)="irACrearUsuario()"
           class="bg-white/10 border border-white/20 text-white text-sm px-4 py-2 rounded-lg hover:bg-white/20 transition">
           + Crear usuario
@@ -925,10 +933,16 @@
         <div class="bg-white rounded-2xl shadow-lg p-6">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-bold text-gray-800">📊 Casos en cola por llamador</h3>
-            <button (click)="cargarDatosCola()"
-              class="text-xs text-purple-600 hover:text-purple-800 underline">
-              Actualizar
-            </button>
+            <div class="flex items-center gap-3">
+              <button (click)="descargarExcelCola()" [disabled]="descargandoCola"
+                class="text-xs bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold px-3 py-1.5 rounded-lg transition">
+                {{ descargandoCola ? 'Descargando...' : '⬇ Descargar Excel' }}
+              </button>
+              <button (click)="cargarDatosCola()"
+                class="text-xs text-purple-600 hover:text-purple-800 underline">
+                Actualizar
+              </button>
+            </div>
           </div>
 
           @if (colaEstados.length === 0) {
@@ -950,7 +964,18 @@
                     <div class="h-2 bg-purple-500 rounded-full"
                          [style.width]="(c.cantidad / colaEstados[0].cantidad * 100) + '%'"></div>
                   </div>
-                  <!-- Límite de pendientes -->
+                  <!-- Perfil y Límite — solo para llamadores reales -->
+                  @if (c.apodo !== '— Sin asignar —') {
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-xs text-gray-400">Perfil:</span>
+                    <select [(ngModel)]="perfilesConfig[c.apodo]"
+                      (change)="guardarPerfilLlamador(c.apodo)"
+                      class="border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300">
+                      <option value="">Todos</option>
+                      <option value="volumen">Volumen</option>
+                      <option value="highticket">HighTicket</option>
+                    </select>
+                  </div>
                   <div class="flex items-center gap-1.5 ml-2">
                     <span class="text-xs text-gray-400">Límite pend.:</span>
                     <input type="number" min="1" max="999"
@@ -965,6 +990,7 @@
                       <span class="text-xs text-green-600">{{ limitesMensaje[c.apodo] }}</span>
                     }
                   </div>
+                  } <!-- fin @if llamador real -->
                   <!-- Liberar todos los casos de este llamador -->
                   @if (c.apodo !== '— Sin asignar —') {
                     <button (click)="liberarCasosApodo(c.apodo)"
@@ -980,6 +1006,31 @@
               }
             </div>
           }
+        </div>
+
+        <!-- Perfiles de llamadores -->
+        <div class="bg-white rounded-2xl shadow-lg p-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">👤 Perfil por llamador</h3>
+          @if (todosLlamadores.length === 0) {
+            <p class="text-sm text-gray-400">No hay llamadores registrados.</p>
+          }
+          <div class="flex flex-col gap-2">
+            @for (ll of todosLlamadores; track ll.apodo) {
+              <div class="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
+                <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-bold text-blue-700 shrink-0">
+                  {{ ll.apodo.charAt(0).toUpperCase() }}
+                </div>
+                <span class="font-medium text-gray-800 w-36">{{ ll.apodo }}</span>
+                <select [(ngModel)]="perfilesConfig[ll.apodo]"
+                  (change)="guardarPerfilLlamador(ll.apodo)"
+                  class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  <option value="">Todos los casos</option>
+                  <option value="volumen">Volumen</option>
+                  <option value="highticket">HighTicket</option>
+                </select>
+              </div>
+            }
+          </div>
         </div>
 
         <!-- Reglas de asignación -->
@@ -1621,7 +1672,7 @@
             <div><p class="text-xs text-gray-400">DNI</p><p class="font-semibold text-gray-800">{{ casoDetalle.NroDocumento || '—' }}</p></div>
             <div><p class="text-xs text-gray-400">Sexo</p><p class="font-semibold text-gray-800">{{ casoDetalle.Sexo || '—' }}</p></div>
             <div><p class="text-xs text-gray-400">Ocupación</p><p class="font-semibold text-gray-800">{{ casoDetalle.Ocupacion || '—' }}</p></div>
-            <div><p class="text-xs text-gray-400">Fecha Nac.</p><p class="font-semibold text-gray-800">{{ casoDetalle.FechaNacimiento || '—' }}</p></div>
+            <div><p class="text-xs text-gray-400">Fecha Nac.</p><p class="font-semibold text-gray-800">{{ formatFecha(casoDetalle.FechaNacimiento) }}</p></div>
           </div>
         </div>
 

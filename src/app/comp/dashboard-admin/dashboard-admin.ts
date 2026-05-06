@@ -373,9 +373,37 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   limitesGuardando: Record<string, boolean> = {};
   limitesMensaje: Record<string, string> = {};
 
+  // Perfiles por llamador
+  perfilesConfig: Record<string, string> = {};
+  todosLlamadores: Array<{ apodo: string; perfil: string; limitePendientes: number }> = [];
+
   // Liberar casos por llamador
   liberandoApodo: Record<string, boolean> = {};
   liberadosMensaje: Record<string, string> = {};
+
+  descargandoCola = false;
+
+  vaciandoCola = false;
+  vaciarColaEliminados = 0;
+
+  async vaciarCola() {
+    this.vaciandoCola = true;
+    this.vaciarColaEliminados = 0;
+    this.cdr.detectChanges();
+    try {
+      const result = await this.fs.vaciarCola((n) => {
+        this.vaciarColaEliminados = n;
+        this.cdr.detectChanges();
+      });
+      this.vaciarColaEliminados = result.eliminados;
+      alert(`✓ ${result.eliminados} casos en cola eliminados.`);
+    } catch (e: any) {
+      alert('Error: ' + (e?.message ?? e));
+    } finally {
+      this.vaciandoCola = false;
+      this.cdr.detectChanges();
+    }
+  }
 
   async vaciarBDMadre() {
     this.estadoVaciar = 'borrando';
@@ -402,6 +430,28 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.ventaSiError = '';
     this.cdr.detectChanges();
     try {
+      // Exportar Excel antes de borrar
+      const casos = await this.fs.getCasosVentaSi();
+      if (casos.length > 0) {
+        const filas = casos.map(c => ({
+          Trabajador: c.Trabajador || '',
+          CUIL: c.CUIL || '',
+          Empresa: c.Emp_Denominacion || '',
+          ART: (c as any).ART || '',
+          Dias_ILT: c.Dias_ILT || '',
+          Fecha_Accidente: c.Fecha_Accidente || '',
+          Lesion: c.Lesion_1 || '',
+          Diagnostico: c.Diag_1 || '',
+          Zona: c.zona || '',
+          Ingreso_Base: c.Ingreso_Base || '',
+          Registrado_Por: c.Registrado_Por || '',
+        }));
+        const ws = XLSX.utils.json_to_sheet(filas);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'VentaSI');
+        XLSX.writeFile(wb, `venta_si_backup_${new Date().toISOString().slice(0,10)}.xlsx`);
+      }
+
       const result = await this.fs.eliminarVentaSi((n) => {
         this.ventaSiEliminados = n;
         this.cdr.detectChanges();
@@ -932,7 +982,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     65: 'Nacionalidad',
     67: 'CUIL_Definitiva',
     68: 'venta',
-    69: 'ASGINADO',
+    69: 'tipoCaso',
   };
 
   private excelSerialAFecha(serial: number): string {
@@ -1087,16 +1137,18 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.colaCargando = true;
     this.cdr.detectChanges();
     try {
-      [this.colaEstados, this.reglasCola] = await Promise.all([
+      // Reparar ASGINADO corruptos ('0','1') antes de cargar estados
+      await this.fs.repararAsginadoTipoCaso();
+
+      [this.colaEstados, this.reglasCola, this.todosLlamadores] = await Promise.all([
         this.fs.getEstadoColas(),
         this.fs.getReglasCola(),
+        this.fs.getTodosLlamadoresConPerfil(),
       ]);
-      // Para cada apodo con cola, cargar su límite actual
-      for (const { apodo } of this.colaEstados) {
-        if (!(apodo in this.limitesConfig)) {
-          const cfg = await this.fs.getConfigLlamador(apodo);
-          this.limitesConfig[apodo] = cfg.limitePendientes;
-        }
+      // Inicializar perfilesConfig y limitesConfig con todos los llamadores
+      for (const ll of this.todosLlamadores) {
+        this.perfilesConfig[ll.apodo] = ll.perfil;
+        if (!(ll.apodo in this.limitesConfig)) this.limitesConfig[ll.apodo] = ll.limitePendientes;
       }
     } finally {
       this.colaCargando = false;
@@ -1117,6 +1169,46 @@ export class DashboardAdmin implements OnInit, OnDestroy {
       this.limitesGuardando[apodo] = false;
       this.cdr.detectChanges();
     }
+  }
+
+  async descargarExcelCola(): Promise<void> {
+    this.descargandoCola = true;
+    this.cdr.detectChanges();
+    try {
+      const casos = await this.fs.getCasosEnColaCompleto();
+      const filas = casos.map(c => ({
+        Trabajador: c.Trabajador || '',
+        CUIL: c.CUIL || '',
+        Empresa: c.Emp_Denominacion || '',
+        ART: (c as any).ART || '',
+        Dias_ILT: c.Dias_ILT || '',
+        Fecha_Accidente: c.Fecha_Accidente || '',
+        Lesion: c.Lesion_1 || '',
+        Diagnostico: c.Diag_1 || '',
+        Zona: c.zona || '',
+        Provincia: c.Provincia_Ocurrencia || '',
+        Ingreso_Base: c.Ingreso_Base || '',
+        Registrado_Por: c.Registrado_Por || '',
+        ASGINADO: c.ASGINADO || '',
+        Nro_AT: c.Nro_AT || '',
+        Tipo_Accidente: c.Tipo_Accidente || '',
+        Egreso: c.Egreso || '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(filas);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Cola');
+      XLSX.writeFile(wb, `cola_${new Date().toISOString().slice(0,10)}.xlsx`);
+    } catch (e: any) {
+      alert('Error al descargar: ' + (e?.message ?? e));
+    } finally {
+      this.descargandoCola = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async guardarPerfilLlamador(apodo: string): Promise<void> {
+    const perfil = this.perfilesConfig[apodo] ?? '';
+    await this.fs.setPerfilLlamador(apodo, perfil);
   }
 
   async liberarCasosApodo(apodo: string): Promise<void> {

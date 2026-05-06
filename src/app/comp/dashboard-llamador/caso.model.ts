@@ -52,6 +52,8 @@ export interface CasoModel {
   Emp_Forma_Juridica?: string;
   Emp_Inicio_Afiliacion?: string;
 
+  tipoCaso?: string; // '1' = HighTicket, '0' = Volumen
+
   // Prestación / trámite
   ART?: string;
   Registrado_Por?: string;

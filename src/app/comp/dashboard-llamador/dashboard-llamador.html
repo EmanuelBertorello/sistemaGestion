@@ -381,6 +381,14 @@
               <p><strong>email:</strong> {{ auth.getCurrentEmail() }}</p>
               <p><strong>apodo:</strong> {{ apodoUsuario }}</p>
               <p><strong>identificador:</strong> {{ apodoUsuario || auth.getCurrentEmail() }}</p>
+              @if (sinDatosError) {
+                <p class="mt-2 text-red-600"><strong>ERROR:</strong> {{ sinDatosError }}</p>
+              }
+              @if (debugInfo) {
+                <p class="mt-2"><strong>casos libres:</strong> {{ debugInfo.libres }}</p>
+                <p><strong>casos asignados a mí:</strong> {{ debugInfo.asignados }}</p>
+                <p><strong>variantes:</strong> {{ debugInfo.variantesUsadas.join(', ') }}</p>
+              }
             </div>
           </div>
         }
@@ -696,11 +704,11 @@
                       </div>
                       <div class="bg-gray-50 rounded-xl p-3">
                         <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Ingreso denuncia</p>
-                        <p class="text-sm font-medium text-gray-700">{{ caso.Fecha_Ingreso_Denuncia }}</p>
+                        <p class="text-sm font-medium text-gray-700">{{ formatFecha(caso.Fecha_Ingreso_Denuncia) }}</p>
                       </div>
                       <div class="bg-gray-50 rounded-xl p-3">
                         <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Alta médica</p>
-                        <p class="text-sm font-medium text-gray-700">{{ caso.Fecha_Alta_Medica }}</p>
+                        <p class="text-sm font-medium text-gray-700">{{ formatFecha(caso.Fecha_Alta_Medica) }}</p>
                       </div>
                       <div class="bg-gray-50 rounded-xl p-3">
                         <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Ingreso base</p>

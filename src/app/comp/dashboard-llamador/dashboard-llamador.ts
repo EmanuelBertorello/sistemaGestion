@@ -81,6 +81,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   filtroZona = '';
   filtroDiag = '';
 
+  perfilLlamador = ''; // '' | 'volumen' | 'highticket'
   sinDatos = false;
   sumario: SumarioCertero | null = null;
   cargandoSumario = false;
@@ -128,9 +129,10 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       this.firestoreService.asegurarUsuarioRegistrado(uid, email);
       this.apodoUsuario = await this.firestoreService.getApodoPorEmail(email);
 
-      // Cargar config personal (límite de pendientes, etc.)
+      // Cargar config personal (límite de pendientes, perfil, etc.)
       const config = await this.firestoreService.getConfigLlamador(this.apodoUsuario);
       this.limitePendientes = config.limitePendientes;
+      this.perfilLlamador = config.perfil ?? '';
 
       // Registrar presencia y mantener heartbeat cada 30s
       await this.firestoreService.registrarPresencia(email, this.apodoUsuario);
@@ -234,7 +236,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       if (this.buscando || this.caso) { this.detenerPolling(); return; }
       try {
         const identificador = this.apodoUsuario || this.auth.getCurrentEmail();
-        const siguiente = await this.firestoreService.getSiguienteCaso(this.apodoUsuario, this.auth.getCurrentEmail());
+        const siguiente = await this.firestoreService.getSiguienteCaso(this.apodoUsuario, this.auth.getCurrentEmail(), this.perfilLlamador);
         if (siguiente) {
           if (siguiente.id) await this.firestoreService.reservarCaso(siguiente.id, identificador);
           this.caso = siguiente;
@@ -254,34 +256,38 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     }
   }
 
+  sinDatosError = '';
+
   private async cargarSiguienteCaso(buscarNuevo = false) {
     this.sinDatos = false;
+    this.sinDatosError = '';
     this.sumario = null;
     this.relacionContactos = {};
     this.cargandoRelacion = {};
     const identificador = this.apodoUsuario || this.auth.getCurrentEmail();
 
-    if (!buscarNuevo) {
-      const yaAsignado = await this.firestoreService.getCasoAsignadoA(identificador, this.auth.getCurrentEmail());
-      if (yaAsignado) {
-        // Si el ASGINADO no coincide con el identificador actual, normalizarlo
-        if (yaAsignado.id && yaAsignado.ASGINADO !== identificador) {
-          this.firestoreService.reservarCaso(yaAsignado.id, identificador);
+    try {
+      if (!buscarNuevo) {
+        const yaAsignado = await this.firestoreService.getCasoAsignadoA(identificador, this.auth.getCurrentEmail());
+        if (yaAsignado) {
+          if (yaAsignado.id && yaAsignado.ASGINADO !== identificador) {
+            this.firestoreService.reservarCaso(yaAsignado.id, identificador);
+          }
+          this.caso = yaAsignado;
+          this.cargarSumario(yaAsignado.CUIL);
+          return;
         }
-        this.caso = yaAsignado;
-        this.cargarSumario(yaAsignado.CUIL);
+      }
+
+      const siguiente = await this.firestoreService.getSiguienteCaso(this.apodoUsuario, this.auth.getCurrentEmail(), this.perfilLlamador);
+      if (siguiente) {
+        if (siguiente.id) await this.firestoreService.reservarCaso(siguiente.id, identificador);
+        this.caso = siguiente;
+        this.cargarSumario(siguiente.CUIL);
         return;
       }
-    }
-
-    const siguiente = await this.firestoreService.getSiguienteCaso(this.apodoUsuario, this.auth.getCurrentEmail());
-    if (siguiente) {
-      if (siguiente.id) {
-        await this.firestoreService.reservarCaso(siguiente.id, identificador);
-      }
-      this.caso = siguiente;
-      this.cargarSumario(siguiente.CUIL);
-      return;
+    } catch (e: any) {
+      this.sinDatosError = e?.message ?? String(e);
     }
 
     this.caso = null;
