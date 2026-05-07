@@ -382,6 +382,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   liberadosMensaje: Record<string, string> = {};
 
   descargandoCola = false;
+  reasignando = false;
 
   vaciandoCola = false;
   vaciarColaEliminados = 0;
@@ -1193,6 +1194,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
         Nro_AT: c.Nro_AT || '',
         Tipo_Accidente: c.Tipo_Accidente || '',
         Egreso: c.Egreso || '',
+        Tipo: (c as any).tipoCaso === '1' ? 'HighTicket' : (c as any).tipoCaso === '0' ? 'Volumen' : '',
       }));
       const ws = XLSX.utils.json_to_sheet(filas);
       const wb = XLSX.utils.book_new();
@@ -1209,6 +1211,20 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   async guardarPerfilLlamador(apodo: string): Promise<void> {
     const perfil = this.perfilesConfig[apodo] ?? '';
     await this.fs.setPerfilLlamador(apodo, perfil);
+  }
+
+  async reasignarEmaAMatias(): Promise<void> {
+    this.reasignando = true;
+    this.cdr.detectChanges();
+    try {
+      const n = await this.fs.reasignarCasosDe('ema', 'MATIAS');
+      alert(`✓ ${n} casos reasignados de EMA → MATIAS`);
+    } catch (e: any) {
+      alert('Error: ' + (e?.message ?? e));
+    } finally {
+      this.reasignando = false;
+      this.cdr.detectChanges();
+    }
   }
 
   async liberarCasosApodo(apodo: string): Promise<void> {

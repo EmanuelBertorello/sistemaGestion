@@ -833,6 +833,29 @@ export class FirestoreService {
     return { libres, asignados, variantesUsadas: arr };
   }
 
+  async reasignarCasosDe(desdeApodo: string, hastaApodo: string): Promise<number> {
+    const ref = collection(this.db, COL_CASOS);
+    const variantes = new Set<string>();
+    const add = (s: string) => {
+      if (!s) return;
+      variantes.add(s); variantes.add(s.toLowerCase()); variantes.add(s.toUpperCase());
+      variantes.add(s.charAt(0).toUpperCase() + s.slice(1).toLowerCase());
+    };
+    add(desdeApodo);
+    const arr = Array.from(variantes);
+    const snaps = await Promise.all(arr.map(v => getDocs(query(ref, where('ASGINADO', '==', v)))));
+    const todos = [...new Map(snaps.flatMap(s => s.docs).map(d => [d.id, d])).values()];
+    const chunkSize = 499;
+    for (let i = 0; i < todos.length; i += chunkSize) {
+      const batch = writeBatch(this.db);
+      todos.slice(i, i + chunkSize).forEach(d => {
+        batch.update(d.ref, { ASGINADO: hastaApodo });
+      });
+      await batch.commit();
+    }
+    return todos.length;
+  }
+
   async repararAsginadoTipoCaso(): Promise<number> {
     const ref = collection(this.db, COL_CASOS);
     const [snap0, snap1] = await Promise.all([
@@ -876,8 +899,13 @@ export class FirestoreService {
 
   async getCantidadEnCola(): Promise<number> {
     const ref = collection(this.db, COL_CASOS);
-    const snap = await getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', '')));
-    return snap.docs.filter(d => !this._esVentaSi(d.data())).length;
+    const snap = await getDocs(query(ref, where('procesado', '==', false)));
+    const BASURA = new Set(['asginado', 'asignado', 'assigned', 'apodo', 'llamador', 'nombre']);
+    return snap.docs.filter(d => {
+      if (this._esVentaSi(d.data())) return false;
+      const raw = (d.data()['ASGINADO'] ?? '').toString().trim();
+      return !raw || BASURA.has(raw.toLowerCase());
+    }).length;
   }
 
   // ── Noticias ──────────────────────────────────────────────
