@@ -833,6 +833,39 @@ export class FirestoreService {
     return { libres, asignados, variantesUsadas: arr };
   }
 
+  async reasignarCasosPorEstado(
+    desdeApodo: string,
+    hastaApodo: string,
+    hastaEmail: string,
+    estados: string[]
+  ): Promise<number> {
+    if (!desdeApodo || !hastaApodo || estados.length === 0) return 0;
+    const ref = collection(this.db, COL_CASOS);
+    const variantes = new Set<string>();
+    const add = (s: string) => {
+      if (!s) return;
+      variantes.add(s); variantes.add(s.toLowerCase()); variantes.add(s.toUpperCase());
+      variantes.add(s.charAt(0).toUpperCase() + s.slice(1).toLowerCase());
+    };
+    add(desdeApodo);
+    const arr = Array.from(variantes);
+    const snaps = await Promise.all(arr.map(v => getDocs(query(ref, where('ASGINADO', '==', v)))));
+    const todosMap = new Map<string, any>();
+    for (const snap of snaps) {
+      for (const d of snap.docs) todosMap.set(d.id, d);
+    }
+    const filtrados = Array.from(todosMap.values()).filter(d => estados.includes(d.data()['estado']));
+    const chunkSize = 499;
+    for (let i = 0; i < filtrados.length; i += chunkSize) {
+      const batch = writeBatch(this.db);
+      filtrados.slice(i, i + chunkSize).forEach(d => {
+        batch.update(d.ref, { ASGINADO: hastaApodo, procesadoPor: hastaEmail });
+      });
+      await batch.commit();
+    }
+    return filtrados.length;
+  }
+
   async reasignarCasosDe(desdeApodo: string, hastaApodo: string): Promise<number> {
     const ref = collection(this.db, COL_CASOS);
     const variantes = new Set<string>();
@@ -873,6 +906,27 @@ export class FirestoreService {
       await batch.commit();
     }
     return todos.length;
+  }
+
+  /** Elimina casos no procesados con Dias_ILT < minDias (default 10) */
+  async eliminarPorMinILT(minDias: number = 10, onProgress?: (n: number) => void): Promise<{ eliminados: number }> {
+    const ref = collection(this.db, COL_CASOS);
+    const snap = await getDocs(query(ref, where('procesado', '==', false)));
+    const aEliminar = snap.docs.filter(d => {
+      const val = Number((d.data()['Dias_ILT'] ?? '').toString().trim());
+      return !isNaN(val) && val < minDias;
+    }).map(d => d.id);
+
+    let eliminados = 0;
+    const chunkSize = 499;
+    for (let i = 0; i < aEliminar.length; i += chunkSize) {
+      const batch = writeBatch(this.db);
+      aEliminar.slice(i, i + chunkSize).forEach(id => batch.delete(doc(this.db, COL_CASOS, id)));
+      await batch.commit();
+      eliminados += Math.min(chunkSize, aEliminar.length - i);
+      onProgress?.(eliminados);
+    }
+    return { eliminados };
   }
 
   async vaciarCola(onProgress?: (n: number) => void): Promise<{ eliminados: number }> {

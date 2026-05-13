@@ -1,25 +1,8 @@
-<div class="relative min-h-screen bg-gray-100 overflow-hidden flex flex-col">
+<div class="min-h-screen flex flex-col" style="background-color:var(--surface)">
 
-  <div class="absolute inset-0 z-0 pointer-events-none">
-    <svg viewBox="0 0 1440 800" preserveAspectRatio="xMidYMid slice"
-         xmlns="http://www.w3.org/2000/svg" class="w-full h-full">
-      <defs>
-        <linearGradient id="blobGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
-          <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
-        </linearGradient>
-      </defs>
-      <path d="M0,0 L600,0 Q750,200 600,400 Q450,600 650,800 L0,800 Z"
-            fill="url(#blobGrad2)" opacity="0.95"/>
-      <circle cx="280" cy="350" r="220" fill="white" opacity="0.06"/>
-      <circle cx="180" cy="420" r="150" fill="white" opacity="0.06"/>
-      <path d="M1440,800 L900,800 Q800,600 1000,500 Q1200,400 1440,600 Z"
-            fill="url(#blobGrad2)" opacity="0.5"/>
-    </svg>
-  </div>
-
-  <!-- Header -->
-  <div class="relative z-10 grid grid-cols-3 items-center px-4 sm:px-8 py-3 sm:py-4 gap-2">
+  <!-- Header institucional -->
+  <div class="app-header sticky top-0 z-30">
+  <div class="grid grid-cols-3 items-center px-4 sm:px-8 py-3 sm:py-4 gap-2">
     <!-- Izquierda -->
     <div class="text-xs tracking-[0.2em] text-blue-100 uppercase hidden sm:block">Abogados · Dashboard</div>
     <div class="block sm:hidden"></div>
@@ -27,8 +10,8 @@
     <!-- Centro: nombre -->
     <div class="flex justify-center">
       @if (apodoUsuario) {
-        <div class="bg-white rounded-full px-4 sm:px-6 py-1.5 sm:py-2 shadow-lg">
-          <span class="text-gray-900 font-bold text-base sm:text-2xl tracking-wide whitespace-nowrap">Dr. {{ apodoUsuario }}</span>
+        <div class="dl-name-pill">
+          <span class="whitespace-nowrap">Dr. {{ apodoUsuario }}</span>
         </div>
       }
     </div>
@@ -36,66 +19,47 @@
     <!-- Derecha: stats + logout -->
     <div class="flex items-center justify-end gap-2">
       <!-- Stats card -->
-      <div class="hidden lg:flex bg-white/95 backdrop-blur-sm rounded-xl shadow-lg px-3 py-1.5 gap-4 items-center border border-white/50">
-        <!-- Contactos hoy -->
-        <div class="flex flex-col items-center">
-          <span class="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none whitespace-nowrap">Contactos hoy</span>
-          <span class="text-xl font-black leading-tight"
-            [class.text-green-600]="contactosHoy >= OBJETIVO_DIARIO"
-            [class.text-orange-500]="contactosHoy < OBJETIVO_DIARIO && contactosHoy >= OBJETIVO_DIARIO * 0.7"
-            [class.text-gray-800]="contactosHoy < OBJETIVO_DIARIO * 0.7">{{ contactosHoy }}</span>
-          <span class="text-[8px] text-gray-400 leading-none">/ {{ OBJETIVO_DIARIO }}</span>
+      <!-- Stats chips -->
+      <div class="hidden lg:flex gap-2 items-center">
+        <div class="stat-chip" style="background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.15)">
+          <span class="stat-chip-label" style="color:rgba(255,255,255,0.45)">Contactos</span>
+          <span class="stat-chip-value"
+            [style.color]="contactosHoy >= OBJETIVO_DIARIO ? '#4ade80' : contactosHoy >= OBJETIVO_DIARIO * 0.7 ? '#fb923c' : 'white'">
+            {{ contactosHoy }}<span style="font-size:0.65rem;font-weight:400;color:rgba(255,255,255,0.35)">/{{ OBJETIVO_DIARIO }}</span>
+          </span>
         </div>
-        <div class="w-px h-7 bg-gray-200"></div>
-        <!-- Recontactos -->
-        <div class="flex flex-col items-center">
-          <span class="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none">Recontactos</span>
-          <span class="text-xl font-black text-blue-600 leading-tight">{{ recontactosHoy }}</span>
-          <span class="text-[8px] text-gray-400 leading-none">hoy</span>
+        <div class="stat-chip" style="background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.15)">
+          <span class="stat-chip-label" style="color:rgba(255,255,255,0.45)">Interesados</span>
+          <span class="stat-chip-value" style="color:#fbbf24">{{ interesadosCount }}</span>
         </div>
-        <div class="w-px h-7 bg-gray-200"></div>
-        <!-- Interesados -->
-        <div class="flex flex-col items-center">
-          <span class="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none">Interesados</span>
-          <span class="text-xl font-black text-yellow-500 leading-tight">{{ interesadosCount }}</span>
-          <span class="text-[8px] text-gray-400 leading-none">pend.</span>
-        </div>
-        <div class="w-px h-7 bg-gray-200"></div>
-        <!-- Con abogado -->
-        <div class="flex flex-col items-center">
-          <span class="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none whitespace-nowrap">Con abogado</span>
-          <span class="text-xl font-black text-purple-600 leading-tight">{{ conAbogadoCount }}</span>
-          <span class="text-[8px] text-gray-400 leading-none">total</span>
+        <div class="stat-chip" style="background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.15)">
+          <span class="stat-chip-label" style="color:rgba(255,255,255,0.45)">Con abogado</span>
+          <span class="stat-chip-value" style="color:#c084fc">{{ conAbogadoCount }}</span>
         </div>
       </div>
 
-      <button (click)="cerrarSesion()"
-        class="bg-white border border-gray-200 text-gray-700 text-xs sm:text-sm px-3 sm:px-4 py-2 rounded shadow hover:bg-gray-50 transition shrink-0 whitespace-nowrap">
-        Cerrar sesión
-      </button>
+      <button (click)="cerrarSesion()" class="btn btn-ghost-white btn-sm shrink-0">Salir</button>
     </div>
+  </div>
   </div>
 
   <!-- Carga inicial -->
   @if (cargandoInicial) {
-    <div class="relative z-10 flex-1 flex items-center justify-center">
-      <div class="flex flex-col items-center gap-4 bg-white/80 backdrop-blur-sm px-10 py-8 rounded-2xl shadow-xl">
-        <svg class="animate-spin h-10 w-10 text-blue-600" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-        </svg>
-        <p class="text-sm text-blue-700 font-medium">Cargando datos...</p>
+    <div class="flex-1 flex items-center justify-center py-20">
+      <div class="flex flex-col items-center gap-4">
+        <div class="spinner" style="width:2.5rem;height:2.5rem;border-width:3px"></div>
+        <p class="text-sm text-[#697586]">Cargando datos...</p>
       </div>
     </div>
   }
 
   <!-- Modal seguimiento (pendiente desde caso actual o historial) -->
   @if (mostrarModalSeguimiento) {
-    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center" style="z-index:9999">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-7 flex flex-col gap-4">
+    <div class="modal-overlay">
+      <div class="modal-panel">
         <div class="flex items-start justify-between">
           <div>
-            <h2 class="text-lg font-bold text-gray-800">Guardar seguimiento</h2>
+            <h2 class="font-display text-[#0C1A35] text-lg font-bold">Guardar seguimiento</h2>
             @if (casoSeguimiento) {
               <p class="text-sm text-gray-500 mt-0.5 font-semibold">{{ casoSeguimiento.Trabajador }}</p>
             } @else if (caso) {
@@ -154,12 +118,12 @@
 
         <div class="flex gap-3 justify-end pt-1">
           <button (click)="cancelarSeguimiento()"
-            class="px-5 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition">
+            class="btn btn-ghost">
             Cancelar
           </button>
           <button (click)="guardarSeguimientoModal()"
             [disabled]="sgGuardando"
-            class="px-5 py-2 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 transition disabled:opacity-50">
+            class="btn btn-ink">
             @if (sgGuardando) {
               <svg class="animate-spin h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -175,9 +139,9 @@
 
   <!-- Modal comentario al cambiar estado -->
   @if (mostrarModalComentario) {
-    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center" style="z-index:9999">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col gap-5">
-        <h2 class="text-lg font-bold text-gray-800">Cambiar estado</h2>
+    <div class="modal-overlay">
+      <div class="modal-panel">
+        <h2 class="font-display text-[#0C1A35] text-lg font-bold">Cambiar estado</h2>
         <p class="text-sm text-gray-500">
           Nuevo estado:
           <span class="font-semibold text-blue-700">{{ pendingCambioEstado?.estado }}</span>
@@ -195,11 +159,11 @@
         </div>
         <div class="flex gap-3 justify-end">
           <button (click)="cancelarCambioEstado()"
-            class="px-5 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition">
+            class="btn btn-ghost">
             Cancelar
           </button>
           <button (click)="confirmarCambioEstado()"
-            class="px-5 py-2 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 transition">
+            class="btn btn-ink">
             Confirmar
           </button>
         </div>
@@ -209,12 +173,12 @@
 
   <!-- Modal número de expediente (Acepto) -->
   @if (mostrarModalExpediente) {
-    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center" style="z-index:9999">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col gap-5">
+    <div class="modal-overlay">
+      <div class="modal-panel">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xl font-bold shrink-0">✓</div>
           <div>
-            <h2 class="text-lg font-bold text-gray-800">Caso Aceptado</h2>
+            <h2 class="font-display text-[#0C1A35] text-lg font-bold">Caso Aceptado</h2>
             <p class="text-sm text-gray-500">Ingresá el número de expediente para continuar.</p>
           </div>
         </div>
@@ -239,7 +203,7 @@
             Cancelar
           </button>
           <button (click)="confirmarExpediente()"
-            class="px-6 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-bold transition shadow">
+            class="btn btn-success">
             Confirmar
           </button>
         </div>
@@ -249,130 +213,117 @@
 
   @if (!cargandoInicial) {
 
-    <!-- Botones de estado -->
-    <div class="relative z-10 flex flex-col gap-2 px-3 sm:px-8 pb-3 sm:pb-4">
+    <!-- Botones de estado + acciones -->
+    <div class="dl-toolbar flex flex-col gap-2 px-4 sm:px-8 py-3">
 
-      <!-- Fila 1: estados + label -->
+      <!-- Fila 1: estados -->
       <div class="flex items-center gap-2 flex-wrap">
         <button (click)="setEstado('acepto')"
-          class="px-4 sm:px-6 py-2 rounded-lg font-semibold text-white text-sm transition-all shadow"
-          [class.ring-4]="estadoActivo === 'acepto'" [class.ring-green-300]="estadoActivo === 'acepto'"
-          [class.bg-green-500]="estadoActivo !== 'acepto'" [class.bg-green-700]="estadoActivo === 'acepto'">
+          class="btn btn-sm text-white font-semibold transition-all"
+          [style.background]="estadoActivo === 'acepto' ? '#15803D' : '#16a34a'"
+          [style.borderColor]="estadoActivo === 'acepto' ? '#15803D' : '#16a34a'"
+          [style.boxShadow]="estadoActivo === 'acepto' ? '0 0 0 3px rgba(134,239,172,0.4)' : 'none'">
           ✓ Acepto
         </button>
         <button (click)="setEstado('pendiente')"
-          class="px-4 sm:px-6 py-2 rounded-lg font-semibold text-white text-sm transition-all shadow"
-          [class.ring-4]="estadoActivo === 'pendiente'" [class.ring-yellow-300]="estadoActivo === 'pendiente'"
-          [class.bg-yellow-400]="estadoActivo !== 'pendiente'" [class.bg-yellow-600]="estadoActivo === 'pendiente'">
+          class="btn btn-sm text-white font-semibold"
+          [style.background]="estadoActivo === 'pendiente' ? '#B45309' : '#D97706'"
+          [style.borderColor]="estadoActivo === 'pendiente' ? '#B45309' : '#D97706'"
+          [style.boxShadow]="estadoActivo === 'pendiente' ? '0 0 0 3px rgba(253,224,71,0.35)' : 'none'">
           ⏳ Pendiente
         </button>
         <button (click)="abrirDescartar()"
-          class="px-4 sm:px-6 py-2 rounded-lg font-semibold text-white text-sm transition-all shadow"
-          [class.ring-4]="esEstadoDescartar" [class.ring-red-300]="esEstadoDescartar"
-          [class.bg-red-500]="!esEstadoDescartar" [class.bg-red-700]="esEstadoDescartar">
+          class="btn btn-sm text-white font-semibold"
+          [style.background]="esEstadoDescartar ? '#B91C1C' : '#DC2626'"
+          [style.borderColor]="esEstadoDescartar ? '#B91C1C' : '#DC2626'"
+          [style.boxShadow]="esEstadoDescartar ? '0 0 0 3px rgba(252,165,165,0.35)' : 'none'">
           ✕ Descartar
         </button>
         @if (estadoActivo) {
-          <span class="text-white text-xs sm:text-sm font-medium bg-white/20 px-3 py-2 rounded-lg backdrop-blur-sm">
-            Estado: <strong>{{ estadoActivoLabel }}</strong>
+          <span class="text-white/70 text-xs font-medium bg-white/10 px-3 py-1.5 rounded border border-white/15">
+            → <strong class="text-white">{{ estadoActivoLabel }}</strong>
           </span>
         }
       </div>
 
-      <!-- Fila 2: acciones + límite -->
+      <!-- Fila 2: acciones secundarias -->
       <div class="flex items-center gap-2 flex-wrap">
         <button (click)="solicitarDatoNuevo()"
-          [style.cursor]="(!estadoActivo || !caso || buscando) ? 'not-allowed' : 'pointer'"
-          [style.opacity]="(!estadoActivo || !caso || buscando) ? '0.5' : '1'"
-          [style.pointer-events]="(!estadoActivo || !caso || buscando) ? 'none' : 'auto'"
-          class="text-xs sm:text-sm px-3 sm:px-4 py-2 rounded shadow transition flex items-center gap-2 bg-white border border-gray-200 text-gray-700">
+          [disabled]="!estadoActivo || !caso || buscando"
+          class="btn btn-ghost-white btn-sm">
           @if (buscando) {
-            <svg class="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
+            <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
             </svg>
             Buscando...
           } @else {
-            Solicitar Dato Nuevo
+            Siguiente caso
           }
         </button>
-        <button (click)="generarAnexo()"
-          class="bg-white border border-gray-200 text-gray-700 text-xs sm:text-sm px-3 sm:px-4 py-2 rounded shadow hover:bg-gray-50 transition">
-          Generar ANEXO
-        </button>
-        <button (click)="mostrarModalMatricula = true"
-          class="bg-white border border-gray-200 text-gray-700 text-xs sm:text-sm px-3 sm:px-4 py-2 rounded shadow hover:bg-gray-50 transition">
-          Descargar Matrícula
-        </button>
+        <button (click)="generarAnexo()" class="btn btn-ghost-white btn-sm">ANEXO</button>
+        <button (click)="mostrarModalMatricula = true" class="btn btn-ghost-white btn-sm">Matrícula</button>
       </div>
 
-      <!-- Sub-card Descartar -->
+      <!-- Sub-panel Descartar -->
       @if (mostrarDescartarOpciones) {
-        <div class="flex items-center gap-2 flex-wrap bg-white/10 backdrop-blur-sm rounded-xl px-3 py-3 border border-white/20">
-          <span class="text-white text-xs font-semibold uppercase tracking-wider">Motivo:</span>
+        <div class="flex items-center gap-2 flex-wrap bg-white/[0.06] rounded-lg px-3 py-2.5 border border-white/10">
+          <span class="text-white/50 text-xs font-semibold uppercase tracking-wider mr-1">Motivo:</span>
           <button (click)="elegirDescartar('sincontacto')"
-            class="px-3 py-1.5 rounded-lg font-semibold text-white text-xs transition-all shadow"
-            [class.ring-2]="estadoActivo === 'sincontacto'" [class.ring-white]="estadoActivo === 'sincontacto'"
-            [class.bg-red-400]="estadoActivo !== 'sincontacto'" [class.bg-red-700]="estadoActivo === 'sincontacto'">
+            class="btn btn-sm text-white border-red-400/50"
+            [style.background]="estadoActivo === 'sincontacto' ? '#B91C1C' : 'rgba(220,38,38,0.5)'"
+            [style.boxShadow]="estadoActivo === 'sincontacto' ? '0 0 0 2px white' : 'none'">
             Sin Contacto
           </button>
           <button (click)="elegirDescartar('conabogado')"
-            class="px-3 py-1.5 rounded-lg font-semibold text-white text-xs transition-all shadow"
-            [class.ring-2]="estadoActivo === 'conabogado'" [class.ring-white]="estadoActivo === 'conabogado'"
-            [class.bg-orange-400]="estadoActivo !== 'conabogado'" [class.bg-orange-700]="estadoActivo === 'conabogado'">
+            class="btn btn-sm text-white border-orange-400/50"
+            [style.background]="estadoActivo === 'conabogado' ? '#9A3412' : 'rgba(234,88,12,0.5)'"
+            [style.boxShadow]="estadoActivo === 'conabogado' ? '0 0 0 2px white' : 'none'">
             Con Abogado
           </button>
           <button (click)="elegirDescartar('nointeresado')"
-            class="px-3 py-1.5 rounded-lg font-semibold text-white text-xs transition-all shadow"
-            [class.ring-2]="estadoActivo === 'nointeresado'" [class.ring-white]="estadoActivo === 'nointeresado'"
-            [class.bg-gray-400]="estadoActivo !== 'nointeresado'" [class.bg-gray-700]="estadoActivo === 'nointeresado'">
+            class="btn btn-sm text-white border-gray-400/50"
+            [style.background]="estadoActivo === 'nointeresado' ? '#374151' : 'rgba(107,114,128,0.5)'"
+            [style.boxShadow]="estadoActivo === 'nointeresado' ? '0 0 0 2px white' : 'none'">
             No Interesado
           </button>
         </div>
       }
     </div>
 
-    <!-- Tabs -->
-    <div class="relative z-10 flex gap-2 px-3 sm:px-8 pb-3 sm:pb-4 overflow-x-auto scrollbar-none">
-      <button (click)="setSeccion('caso')"
-        class="px-4 sm:px-6 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all shadow shrink-0 whitespace-nowrap"
-        [class.bg-white]="seccionActiva === 'caso'" [class.text-blue-700]="seccionActiva === 'caso'"
-        [class.bg-white/20]="seccionActiva !== 'caso'" [class.text-white]="seccionActiva !== 'caso'">
-        🗂 Caso actual
+    <!-- Tabs underline -->
+    <div class="nav-tabs overflow-x-auto scrollbar-none">
+      <button (click)="setSeccion('caso')" class="nav-tab shrink-0" [class.active]="seccionActiva === 'caso'">
+        Caso actual
       </button>
-      <button (click)="setSeccion('historial')"
-        class="px-4 sm:px-6 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all shadow flex items-center gap-2 shrink-0 whitespace-nowrap"
-        [class.bg-white]="seccionActiva === 'historial'" [class.text-blue-700]="seccionActiva === 'historial'"
-        [class.bg-white/20]="seccionActiva !== 'historial'" [class.text-white]="seccionActiva !== 'historial'">
-        📋 Historial
+      <button (click)="setSeccion('historial')" class="nav-tab shrink-0 flex items-center gap-2" [class.active]="seccionActiva === 'historial'">
+        Historial
         @if (historial.length > 0) {
-          <span class="bg-blue-500 text-white text-xs rounded-full px-2 py-0.5">{{ historial.length }}</span>
+          <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.7);font-size:0.65rem;padding:0.1rem 0.4rem;border-radius:3px;font-family:'JetBrains Mono',monospace">{{ historial.length }}</span>
         }
       </button>
-      <button (click)="setSeccion('seguimiento')"
-        class="px-4 sm:px-6 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all shadow flex items-center gap-2 shrink-0 whitespace-nowrap"
-        [class.bg-white]="seccionActiva === 'seguimiento'" [class.text-blue-700]="seccionActiva === 'seguimiento'"
-        [class.bg-white/20]="seccionActiva !== 'seguimiento'" [class.text-white]="seccionActiva !== 'seguimiento'">
-        🔄 Seguimiento
+      <button (click)="setSeccion('seguimiento')" class="nav-tab shrink-0 flex items-center gap-2" [class.active]="seccionActiva === 'seguimiento'">
+        Seguimiento
         @if (seguimiento.length > 0) {
-          <span class="bg-yellow-400 text-white text-xs rounded-full px-2 py-0.5">{{ seguimiento.length }}</span>
+          <span style="background:rgba(184,135,42,0.3);color:#fcd34d;font-size:0.65rem;padding:0.1rem 0.4rem;border-radius:3px;font-family:'JetBrains Mono',monospace">{{ seguimiento.length }}</span>
         }
       </button>
     </div>
 
     <!-- Contenido -->
-    <div class="relative z-10 px-3 sm:px-8 pb-8">
+    <div class="px-4 sm:px-8 pb-8 mt-2">
 
       <!-- CASO ACTUAL -->
       @if (seccionActiva === 'caso') {
 
         <!-- Sin datos -->
         @if (sinDatos) {
-          <div class="bg-white rounded-2xl shadow-lg p-12 text-center max-w-lg mx-auto mt-8">
-            <p class="text-6xl mb-4">📭</p>
-            <p class="text-gray-700 font-semibold text-lg">No hay casos disponibles</p>
-            <p class="text-sm text-gray-400 mt-2">
-              No quedan casos sin procesar en la base de datos. Contactá al administrador para cargar nuevos datos.
+          <div class="card max-w-lg mx-auto mt-8">
+            <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <p class="font-semibold text-[#0C1A35] text-base mb-1">No hay casos disponibles</p>
+            <p class="text-sm">
+              No quedan casos sin procesar. Contactá al administrador para cargar nuevos datos.
             </p>
             <button (click)="reintentar()" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition">
               Reintentar
@@ -389,6 +340,7 @@
                 <p><strong>casos asignados a mí:</strong> {{ debugInfo.asignados }}</p>
                 <p><strong>variantes:</strong> {{ debugInfo.variantesUsadas.join(', ') }}</p>
               }
+            </div>
             </div>
           </div>
         }
@@ -418,17 +370,17 @@
               <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
 
               <!-- Card caso -->
-              <div class="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
+              <div class="card p-4 sm:p-6">
                 <div class="flex items-start justify-between mb-5">
                   <div>
-                    <h2 class="text-xl font-bold text-gray-800">{{ caso.Trabajador }}</h2>
+                    <h2 class="font-display text-xl font-bold text-[#0C1A35]">{{ caso.Trabajador }}</h2>
                     <p class="text-sm text-gray-400 mt-1">CUIL: {{ caso.CUIL }}</p>
                   </div>
                   <span class="text-xs px-3 py-1 rounded-full font-medium bg-blue-100 text-blue-800">
                     {{ caso.Tipo_Accidente }}
                   </span>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-2 gap-3 dl-case-card">
                   <div class="bg-gray-50 rounded-xl p-3">
                     <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Zona</p>
                     <p class="text-sm font-medium text-gray-700">{{ caso.zona }}</p>
@@ -491,7 +443,7 @@
               </div>
 
               <!-- Card derecha: certero + empresa + ubicación + trámite -->
-              <div class="bg-white rounded-2xl shadow-lg p-4 sm:p-6 flex flex-col gap-4">
+              <div class="card p-4 sm:p-6 flex flex-col gap-4">
 
                 <!-- Certero: contacto -->
                 @if (cargandoSumario) {
@@ -521,16 +473,16 @@
 
                   @if (sumario.celulares && sumario.celulares.length > 0) {
                     <div>
-                      <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">📱 Celulares</h3>
+                      <h3 class="dl-section-head">Celulares</h3>
                       <div class="flex flex-col gap-2">
                         @for (c of sumario.celulares; track c.numCompleto) {
-                          <div class="bg-green-50 rounded-xl px-4 py-3 flex items-center justify-between">
+                          <div class="dl-contact-row flex items-center justify-between">
                             <div>
                               <p class="font-semibold text-gray-800">{{ c.numCompleto }}</p>
                               <p class="text-xs text-gray-400">{{ c.carrier }} · {{ c.localidad }}</p>
                             </div>
                             <button (click)="abrirWaNumero(c.codigoArea, c.numero)"
-                              class="bg-green-500 hover:bg-green-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+                              class="btn btn-success btn-sm shrink-0">
                               WhatsApp
                             </button>
                           </div>
@@ -541,10 +493,10 @@
 
                   @if (sumario.telefonosFijos && sumario.telefonosFijos.length > 0) {
                     <div>
-                      <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">📞 Teléfonos fijos</h3>
+                      <h3 class="dl-section-head">Teléfonos fijos</h3>
                       <div class="flex flex-col gap-2">
                         @for (t of sumario.telefonosFijos; track t.numCompleto) {
-                          <div class="bg-blue-50 rounded-xl px-4 py-3">
+                          <div class="dl-fixed-row">
                             <p class="font-semibold text-gray-800">{{ t.numCompleto }}</p>
                             <p class="text-xs text-gray-400">{{ t.carrier }} · {{ t.localidad }}</p>
                           </div>
@@ -555,10 +507,10 @@
 
                   @if (sumario.emails && sumario.emails.length > 0) {
                     <div>
-                      <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">@ Emails</h3>
+                      <h3 class="dl-section-head">Emails</h3>
                       <div class="flex flex-col gap-1">
                         @for (e of sumario.emails; track e.direccion) {
-                          <div class="bg-blue-50 rounded-xl px-4 py-2">
+                          <div class="dl-email-row">
                             <p class="text-sm font-medium text-gray-800">{{ e.direccion }}</p>
                             @if (e.fuentes && e.fuentes.length > 0) {
                               <p class="text-xs text-gray-400">{{ e.fuentes.join(', ') }}</p>
@@ -572,7 +524,7 @@
 
                   @if (sumario.relaciones && sumario.relaciones.length > 0) {
                     <div>
-                      <h3 class="text-sm font-bold text-gray-600 mb-2 uppercase tracking-wider">👥 Relaciones</h3>
+                      <h3 class="dl-section-head">Relaciones</h3>
                       <div class="flex flex-col gap-2">
                         @for (r of sumario.relaciones; track r.cuil) {
                           <div class="bg-gray-50 rounded-xl px-4 py-3">
@@ -648,7 +600,7 @@
               </div><!-- cierre grid superior (2 cols) -->
 
               <!-- Card inferior: Empleador + Ocurrencia + Trámite (ancho completo) -->
-              <div class="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
+              <div class="card p-4 sm:p-6">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
                   <div class="col-span-2 lg:col-span-1">
@@ -937,10 +889,10 @@
                           </svg>
                         }
                         @if (!cambiandoEstado[c.id!]) {
-                          @if (c.estado === 'conabogado' || c.estado === 'nointeresado') {
-                            <!-- Solo badge sin selector para conabogado/nointeresado -->
+                          @if (c.estado === 'conabogado') {
+                            <!-- Solo badge sin selector para conabogado -->
                             <span class="text-xs rounded-full px-2 py-1 font-medium" [class]="getEstadoColor(c.estado)">
-                              {{ c.estado === 'conabogado' ? 'Con Abogado' : 'No Interesado' }}
+                              Con Abogado
                             </span>
                           } @else {
                             <select
@@ -1487,13 +1439,11 @@
 <!-- ── Botón Portal de Noticias ── -->
 <button
   (click)="mostrarNoticias = true"
-  class="fixed bottom-6 left-6 z-40 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold text-sm px-5 py-3 rounded-full shadow-xl transition"
+  class="dl-news-btn"
 >
-  📰 Portal de Noticias
+  Noticias
   @if (noticias.length > 0) {
-    <span class="bg-white text-red-600 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-      {{ noticias.length }}
-    </span>
+    <span class="dl-news-badge">{{ noticias.length }}</span>
   }
 </button>
 

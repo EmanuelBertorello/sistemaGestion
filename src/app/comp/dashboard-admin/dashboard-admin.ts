@@ -65,6 +65,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.anexo.generarAnexo(caso);
   }
 
+  sidebarCollapsed = false;
   seccionActiva: SeccionActiva = 'estadisticas';
 
   // Filtro de período en estadísticas
@@ -382,10 +383,32 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   liberadosMensaje: Record<string, string> = {};
 
   descargandoCola = false;
-  reasignando = false;
 
   vaciandoCola = false;
   vaciarColaEliminados = 0;
+
+  eliminandoILT = false;
+  iltEliminados = 0;
+
+  async eliminarMenosDe10ILT(): Promise<void> {
+    if (!confirm('¿Eliminar de la cola todos los casos con menos de 10 días de ILT?')) return;
+    this.eliminandoILT = true;
+    this.iltEliminados = 0;
+    this.cdr.detectChanges();
+    try {
+      const result = await this.fs.eliminarPorMinILT(10, (n) => {
+        this.iltEliminados = n;
+        this.cdr.detectChanges();
+      });
+      this.iltEliminados = result.eliminados;
+      alert(`✓ ${result.eliminados} casos con ILT < 10 días eliminados.`);
+    } catch (e: any) {
+      alert('Error: ' + (e?.message ?? e));
+    } finally {
+      this.eliminandoILT = false;
+      this.cdr.detectChanges();
+    }
+  }
 
   async vaciarCola() {
     this.vaciandoCola = true;
@@ -895,13 +918,15 @@ export class DashboardAdmin implements OnInit, OnDestroy {
 
   colorEstado(e: string): string {
     const map: Record<string, string> = {
-      acepto: 'bg-green-100 text-green-700',
-      interesado: 'bg-yellow-100 text-yellow-700',
-      sincontacto: 'bg-red-100 text-red-700',
-      conabogado: 'bg-orange-100 text-orange-700',
-      nointeresado: 'bg-gray-100 text-gray-600',
+      acepto: 'badge badge-acepto',
+      pendiente: 'badge badge-pendiente',
+      interesado: 'badge badge-interesado',
+      nocontesto: 'badge badge-interesado',
+      sincontacto: 'badge badge-sincontacto',
+      conabogado: 'badge badge-conabogado',
+      nointeresado: 'badge badge-nointeresado',
     };
-    return map[e] ?? 'bg-gray-100 text-gray-500';
+    return map[e] ?? 'badge badge-nointeresado';
   }
 
   async adminCambiarEstado(estado: EstadoCaso): Promise<void> {
@@ -1146,6 +1171,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
         this.fs.getReglasCola(),
         this.fs.getTodosLlamadoresConPerfil(),
       ]);
+      await this.cargarUsuariosReasig();
       // Inicializar perfilesConfig y limitesConfig con todos los llamadores
       for (const ll of this.todosLlamadores) {
         this.perfilesConfig[ll.apodo] = ll.perfil;
@@ -1213,16 +1239,49 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     await this.fs.setPerfilLlamador(apodo, perfil);
   }
 
-  async reasignarEmaAMatias(): Promise<void> {
-    this.reasignando = true;
+  // ── Reasignación de historial ─────────────────────────────
+  usuariosReasig: Array<{ apodo: string; email: string }> = [];
+  reasigDesde = '';
+  reasigHasta = '';
+  reasigEstados: Record<string, boolean> = { nointeresado: false, conabogado: false, sincontacto: false };
+  reasignandoHist = false;
+  reasigResultado = 0;
+
+  async cargarUsuariosReasig(): Promise<void> {
+    const usuarios = await this.fs.getUsuarios();
+    this.usuariosReasig = usuarios
+      .filter(u => u.apodo?.trim())
+      .map(u => ({ apodo: u.apodo.trim(), email: u.email }))
+      .sort((a, b) => a.apodo.localeCompare(b.apodo));
+  }
+
+  async ejecutarReasignacion(): Promise<void> {
+    const estados = (Object.entries(this.reasigEstados) as [string, boolean][])
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (!this.reasigDesde || !this.reasigHasta || estados.length === 0) {
+      alert('Seleccioná ambos usuarios y al menos un estado.');
+      return;
+    }
+    if (this.reasigDesde === this.reasigHasta) {
+      alert('Los usuarios deben ser distintos.');
+      return;
+    }
+    const hastaUser = this.usuariosReasig.find(u => u.apodo === this.reasigHasta);
+    if (!hastaUser) return;
+    this.reasignandoHist = true;
+    this.reasigResultado = 0;
     this.cdr.detectChanges();
     try {
-      const n = await this.fs.reasignarCasosDe('ema', 'MATIAS');
-      alert(`✓ ${n} casos reasignados de EMA → MATIAS`);
+      const n = await this.fs.reasignarCasosPorEstado(
+        this.reasigDesde, this.reasigHasta, hastaUser.email, estados
+      );
+      this.reasigResultado = n;
+      alert(`✓ ${n} casos reasignados de ${this.reasigDesde} → ${this.reasigHasta}`);
     } catch (e: any) {
       alert('Error: ' + (e?.message ?? e));
     } finally {
-      this.reasignando = false;
+      this.reasignandoHist = false;
       this.cdr.detectChanges();
     }
   }

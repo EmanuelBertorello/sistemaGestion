@@ -1,0 +1,140 @@
+
+/* ── Toolbar (actions bar) ──────────────────────────────────── */
+.dl-toolbar {
+  background: var(--ink);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ── Name pill in header ────────────────────────────────────── */
+.dl-name-pill {
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.20);
+  border-radius: 8px;
+  padding: 0.35rem 1.125rem;
+  box-shadow: none;
+}
+.dl-name-pill span {
+  color: white;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 700;
+  font-size: 1.0625rem;
+  letter-spacing: 0.02em;
+}
+
+/* ── Case data fields grid ──────────────────────────────────── */
+.dl-case-card {
+  gap: 0.5rem;
+}
+.dl-case-card > .bg-gray-50 {
+  background: transparent !important;
+  border-radius: 0 !important;
+  border-bottom: 1px solid var(--border);
+  padding: 0.625rem 0 !important;
+}
+.dl-case-card > .bg-gray-50:last-child {
+  border-bottom: none;
+}
+.dl-case-card > .bg-gray-50 > p:first-child {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  margin: 0 0 0.2rem;
+}
+.dl-case-card > .bg-gray-50 > p:not(:first-child) {
+  font-size: 0.875rem;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 0;
+}
+/* Días ILT big number */
+.dl-case-card > .bg-gray-50 .text-2xl {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.875rem !important;
+  color: var(--cobalt) !important;
+}
+
+/* ── Right card contact rows ────────────────────────────────── */
+.dl-section-head {
+  font-size: 0.635rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.dl-contact-row {
+  background: var(--subtle) !important;
+  border-radius: 8px !important;
+  padding: 0.625rem 0.875rem !important;
+}
+.dl-contact-row p:first-child {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 0.9rem;
+  margin: 0;
+}
+.dl-contact-row p:last-child {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.dl-fixed-row {
+  background: var(--cobalt-subtle) !important;
+  border-radius: 8px !important;
+  padding: 0.625rem 0.875rem !important;
+}
+.dl-fixed-row p:first-child { font-weight: 600; color: var(--ink); font-size: 0.9rem; margin: 0; }
+.dl-fixed-row p:last-child  { font-size: 0.7rem; color: var(--muted); margin: 0; }
+
+.dl-email-row {
+  background: var(--subtle) !important;
+  border-radius: 8px !important;
+  padding: 0.5rem 0.875rem !important;
+}
+.dl-email-row p:first-child { font-size: 0.875rem; font-weight: 500; color: var(--ink); margin: 0; }
+.dl-email-row p:last-child  { font-size: 0.7rem; color: var(--muted); margin: 0; }
+
+.dl-relation-row {
+  background: var(--subtle) !important;
+  border-radius: 8px !important;
+  padding: 0.625rem 0.875rem !important;
+}
+
+/* ── Portal de Noticias floating btn ────────────────────────── */
+.dl-news-btn {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--ink);
+  color: white;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  padding: 0.6rem 1.125rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 4px 16px rgba(12,26,53,0.22);
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.dl-news-btn:hover { background: var(--ink-mid); }
+.dl-news-badge {
+  background: var(--gold);
+  color: white;
+  font-size: 0.625rem;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 5px;
+  min-width: 1.125rem;
+  text-align: center;
+}
