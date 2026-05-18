@@ -266,17 +266,18 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     this.cargandoRelacion = {};
     const identificador = this.apodoUsuario || this.auth.getCurrentEmail();
 
+    const casoAnteriorId = buscarNuevo ? this.caso?.id : undefined;
+
     try {
-      if (!buscarNuevo) {
-        const yaAsignado = await this.firestoreService.getCasoAsignadoA(identificador, this.auth.getCurrentEmail());
-        if (yaAsignado) {
-          if (yaAsignado.id && yaAsignado.ASGINADO !== identificador) {
-            this.firestoreService.reservarCaso(yaAsignado.id, identificador);
-          }
-          this.caso = yaAsignado;
-          this.cargarSumario(yaAsignado.CUIL);
-          return;
+      // Siempre chequear casos pre-asignados primero (no filtra por perfil, no devuelve el anterior)
+      const yaAsignado = await this.firestoreService.getCasoAsignadoA(identificador, this.auth.getCurrentEmail());
+      if (yaAsignado && yaAsignado.id !== casoAnteriorId) {
+        if (yaAsignado.id && yaAsignado.ASGINADO !== identificador) {
+          this.firestoreService.reservarCaso(yaAsignado.id!, identificador);
         }
+        this.caso = yaAsignado;
+        this.cargarSumario(yaAsignado.CUIL);
+        return;
       }
 
       const siguiente = await this.firestoreService.getSiguienteCaso(this.apodoUsuario, this.auth.getCurrentEmail(), this.perfilLlamador);
@@ -465,7 +466,8 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     const cel = this.primerCelular(caso);
     if (!cel) return;
     const tel = (cel.codigoArea + cel.numero).replace(/\D/g, '');
-    window.open(`https://wa.me/54${tel}`, 'wa_llamador');
+    const nombre = encodeURIComponent(`Hola ${caso.Trabajador || ''}`);
+    window.open(`https://web.whatsapp.com/send?phone=54${tel}&text=${nombre}`, 'wa_llamador');
   }
 
   ultimoComentario(caso: CasoModel): string {
@@ -759,14 +761,16 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     return this.historial.filter(c => c.estado === 'conabogado').length;
   }
 
-  abrirWaNumero(codigoArea: string, numero: string): void {
+  abrirWaNumero(codigoArea: string, numero: string, nombre?: string): void {
     const tel = (codigoArea + numero).replace(/\D/g, '');
-    window.open(`https://wa.me/54${tel}`, 'wa_llamador');
+    const txt = encodeURIComponent(`Hola ${nombre || ''}`);
+    window.open(`https://web.whatsapp.com/send?phone=54${tel}&text=${txt}`, 'wa_llamador');
   }
 
-  abrirWhatsappVinculo(documento: string): void {
+  abrirWhatsappVinculo(documento: string, nombre?: string): void {
     const telefono = documento.replace(/\D/g, '');
-    window.open(`https://wa.me/54${telefono}`, 'wa_llamador');
+    const txt = encodeURIComponent(`Hola ${nombre || ''}`);
+    window.open(`https://web.whatsapp.com/send?phone=54${telefono}&text=${txt}`, 'wa_llamador');
   }
 
   async reintentar(): Promise<void> {

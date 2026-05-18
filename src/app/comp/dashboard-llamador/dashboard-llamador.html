@@ -1,4 +1,4 @@
-<div class="min-h-screen flex flex-col" style="background-color:var(--surface)">
+<div class="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col" style="background-color:var(--surface)">
 
   <!-- Header institucional -->
   <div class="app-header sticky top-0 z-30">
@@ -311,7 +311,7 @@
     </div>
 
     <!-- Contenido -->
-    <div class="px-4 sm:px-8 pb-8 mt-2">
+    <div class="px-4 sm:px-8 pb-8 mt-2 lg:flex-1 lg:min-h-0 lg:overflow-hidden lg:pb-2 lg:flex lg:flex-col">
 
       <!-- CASO ACTUAL -->
       @if (seccionActiva === 'caso') {
@@ -346,7 +346,7 @@
         }
 
         @if (caso && !sinDatos) {
-          <div class="relative">
+          <div class="relative lg:flex-1 lg:min-h-0 lg:overflow-hidden">
             @if (buscando) {
               <div class="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl">
                 <div class="flex flex-col items-center gap-4 bg-white/80 backdrop-blur-sm px-10 py-8 rounded-2xl shadow-xl">
@@ -363,14 +363,14 @@
               </div>
             }
 
-            <div class="flex flex-col gap-6 transition-all duration-300"
+            <div class="flex flex-col gap-4 transition-all duration-300 lg:h-full lg:overflow-hidden"
                  [class.opacity-30]="buscando" [class.pointer-events-none]="buscando" [class.blur-sm]="buscando">
 
-              <!-- Fila superior: caso + certero -->
-              <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+              <!-- Grilla principal: 2 cols mobile → 3 cols desktop -->
+              <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:flex-1 lg:min-h-0">
 
               <!-- Card caso -->
-              <div class="card p-4 sm:p-6">
+              <div class="card p-4 sm:p-5 lg:overflow-y-auto lg:min-h-0">
                 <div class="flex items-start justify-between mb-5">
                   <div>
                     <h2 class="font-display text-xl font-bold text-[#0C1A35]">{{ caso.Trabajador }}</h2>
@@ -442,8 +442,8 @@
                 </div>
               </div>
 
-              <!-- Card derecha: certero + empresa + ubicación + trámite -->
-              <div class="card p-4 sm:p-6 flex flex-col gap-4">
+              <!-- Card derecha: certero -->
+              <div class="card p-4 sm:p-5 flex flex-col gap-4 lg:overflow-y-auto lg:min-h-0">
 
                 <!-- Certero: contacto -->
                 @if (cargandoSumario) {
@@ -481,7 +481,7 @@
                               <p class="font-semibold text-gray-800">{{ c.numCompleto }}</p>
                               <p class="text-xs text-gray-400">{{ c.carrier }} · {{ c.localidad }}</p>
                             </div>
-                            <button (click)="abrirWaNumero(c.codigoArea, c.numero)"
+                            <button (click)="abrirWaNumero(c.codigoArea, c.numero, caso.Trabajador)"
                               class="btn btn-success btn-sm shrink-0">
                               WhatsApp
                             </button>
@@ -561,7 +561,7 @@
                                           <p class="text-sm font-semibold text-gray-800">{{ c.numCompleto }}</p>
                                           <p class="text-xs text-gray-400">{{ c.carrier }} · {{ c.localidad }}</p>
                                         </div>
-                                        <button (click)="abrirWaNumero(c.codigoArea, c.numero)"
+                                        <button (click)="abrirWaNumero(c.codigoArea, c.numero, caso.Trabajador)"
                                           class="bg-green-500 hover:bg-green-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
                                           WhatsApp
                                         </button>
@@ -597,11 +597,9 @@
 
               </div><!-- cierre card certero -->
 
-              </div><!-- cierre grid superior (2 cols) -->
-
-              <!-- Card inferior: Empleador + Ocurrencia + Trámite (ancho completo) -->
-              <div class="card p-4 sm:p-6">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <!-- Card 3ra columna: Empleador + Ocurrencia + Trámite -->
+              <div class="card p-4 sm:p-5 lg:overflow-y-auto lg:min-h-0">
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-4">
 
                   <div class="col-span-2 lg:col-span-1">
                     <h3 class="text-sm font-bold text-gray-600 mb-3 uppercase tracking-wider">🏢 Empleador</h3>
@@ -682,7 +680,9 @@
                   </div>
 
                 </div>
-              </div><!-- cierre card empleador -->
+              </div><!-- cierre card empleador / 3ra col -->
+
+              </div><!-- cierre grid 3 cols -->
 
             </div><!-- cierre flex flex-col -->
           </div>
@@ -798,7 +798,7 @@
       <!-- ══════════ HISTORIAL ══════════ -->
       @if (seccionActiva === 'historial') {
 
-        <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col lg:flex-1 lg:min-h-0">
           <!-- Header con buscador y contador -->
           <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
             <h3 class="text-sm font-bold text-gray-600 uppercase tracking-wider shrink-0">📋 Mi historial</h3>
@@ -829,7 +829,7 @@
           }
 
           @if (historial.length > 0) {
-            <div class="overflow-x-auto">
+            <div class="overflow-auto lg:flex-1 lg:min-h-0">
               <table class="w-full text-sm">
                 <thead>
                   <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
@@ -942,10 +942,10 @@
 
       <!-- ══════════ SEGUIMIENTO ══════════ -->
       @if (seccionActiva === 'seguimiento') {
-        <div class="flex gap-4 min-h-[500px]">
+        <div class="flex gap-4 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
 
           <!-- Lista izquierda -->
-          <div class="flex-1 flex flex-col gap-3 min-w-0">
+          <div class="flex-1 flex flex-col gap-3 min-w-0 lg:overflow-y-auto lg:min-h-0">
 
             <!-- Resumen -->
             <div class="grid grid-cols-3 gap-3">
@@ -1271,6 +1271,10 @@
             <p class="text-sm text-gray-700">{{ formatFecha(casoModal.Fecha_Accidente) }}</p>
           </div>
           <div class="bg-gray-50 rounded-xl p-3">
+            <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Alta médica</p>
+            <p class="text-sm text-gray-700">{{ formatFecha(casoModal.Fecha_Alta_Medica) }}</p>
+          </div>
+          <div class="bg-gray-50 rounded-xl p-3">
             <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Tipo accidente</p>
             <p class="text-sm text-gray-700">{{ casoModal.Tipo_Accidente || '—' }}</p>
           </div>
@@ -1350,7 +1354,7 @@
                 @for (cel of (casoModal.certeroData['celulares'] ?? []); track cel.numCompleto) {
                   <div class="flex items-center gap-2">
                     <span class="text-xs text-gray-400 w-12 shrink-0">📱 Cel</span>
-                    <button (click)="abrirWaNumero(cel.codigoArea, cel.numero)"
+                    <button (click)="abrirWaNumero(cel.codigoArea, cel.numero, casoModal.Trabajador)"
                       class="text-green-600 font-semibold font-mono text-sm hover:underline">
                       {{ cel.codigoArea }} {{ cel.numero }}
                     </button>

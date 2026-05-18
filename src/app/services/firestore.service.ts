@@ -17,7 +17,10 @@ import {
   onSnapshot,
   orderBy,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  increment,
+  startAfter,
+  getDoc
 } from 'firebase/firestore';
 import { firebaseApp } from '../firebase.config';
 import { CasoModel, EstadoCaso } from '../comp/dashboard-llamador/caso.model';
@@ -56,17 +59,83 @@ export interface LlamadorStats {
 
 // Nombre real de la colección en Firestore (default database)
 const COL_CASOS = 'BDmadre';
+const COL_CASOS_VENTA_SI = 'casos_ventasi';
+const COL_CASOS_ARCHIVO = 'casos_archivo';
 const COL_USUARIOS = 'usuarios';
 const COL_NOTIFICACIONES = 'notificaciones';
 const COL_PRESENCIA = 'presencia';
 const COL_NOTICIAS = 'noticias';
 const COL_REGLAS = 'reglas_asignacion';
+const COL_STATS = '_stats';
+const COL_STATS_LLAMADORES = 'stats_llamadores';
+const COL_COLA_CONTADORES = 'cola_contadores';
 
 @Injectable({ providedIn: 'root' })
 export class FirestoreService {
   private db: Firestore = getFirestore(firebaseApp);
 
   // ─── CASOS ───────────────────────────────────────────────
+
+  // ── Contador de cola ─────────────────────────────────────
+  private async _actualizarContador(delta: number, deltaVentaSi: number): Promise<void> {
+    try {
+      const ref = doc(this.db, COL_STATS, 'queue');
+      const snap = await getDocs(query(collection(this.db, COL_STATS)));
+      const exists = snap.docs.some(d => d.id === 'queue');
+      if (exists) {
+        await updateDoc(ref, {
+          libres: Math.max(0, (await getDocs(query(collection(this.db, COL_CASOS), where('procesado', '==', false), where('ASGINADO', '==', '')))).docs.filter(d => !this._esVentaSi(d.data())).length)
+        });
+      } else {
+        await setDoc(ref, { libres: 0 });
+      }
+    } catch { /* no bloquear el upload si el contador falla */ }
+  }
+
+  async archivarCasosViejos(diasMinimos = 90, onProgress?: (n: number) => void): Promise<number> {
+    const corte = new Date();
+    corte.setDate(corte.getDate() - diasMinimos);
+    const ref = collection(this.db, COL_CASOS);
+    const snap = await getDocs(query(ref, where('procesado', '==', true),
+      where('procesadoTimestamp', '<=', Timestamp.fromDate(corte))));
+    let archivados = 0;
+    const chunkSize = 499;
+    for (let i = 0; i < snap.docs.length; i += chunkSize) {
+      const chunk = snap.docs.slice(i, i + chunkSize);
+      const batch = writeBatch(this.db);
+      for (const d of chunk) {
+        const archRef = doc(collection(this.db, COL_CASOS_ARCHIVO));
+        batch.set(archRef, { ...d.data(), archivadoEn: serverTimestamp() });
+        batch.delete(d.ref);
+      }
+      await batch.commit();
+      archivados += chunk.length;
+      onProgress?.(archivados);
+    }
+    return archivados;
+  }
+
+  async migrarVentaSiAColeccionSeparada(onProgress?: (n: number) => void): Promise<number> {
+    const snap = await getDocs(query(collection(this.db, COL_CASOS), where('procesado', '==', false)));
+    const ventaSiDocs = snap.docs.filter(d =>
+      d.data()['esVentaSi'] === undefined && this._esVentaSi(d.data())
+    );
+    let migrados = 0;
+    const chunkSize = 499;
+    for (let i = 0; i < ventaSiDocs.length; i += chunkSize) {
+      const chunk = ventaSiDocs.slice(i, i + chunkSize);
+      const batch = writeBatch(this.db);
+      for (const d of chunk) {
+        const newRef = doc(collection(this.db, COL_CASOS_VENTA_SI));
+        batch.set(newRef, { ...d.data(), esVentaSi: true });
+        batch.delete(d.ref);
+      }
+      await batch.commit();
+      migrados += chunk.length;
+      onProgress?.(migrados);
+    }
+    return migrados;
+  }
 
   private _esVentaSi(data: any): boolean {
     const val = (data['venta'] ?? data['Venta'] ?? data['VENTA'] ?? '').toString().toLowerCase().trim();
@@ -106,27 +175,34 @@ export class FirestoreService {
       return true;
     };
 
-    // PASO 1: casos libres (ASGINADO == '') — SIN limit porque hay muchos ventaSI mezclados
-    const snapLibre = await getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', '')));
-    const libre = snapLibre.docs.find(d => !this._esVentaSi(d.data()) && matchPerfil(d.data()));
-    if (libre) return { id: libre.id, ...libre.data() } as CasoModel;
+    // Correr en paralelo: asignados + libres (más rápido, sin riesgo de timeout encadenado)
+    const qLibre = getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', '')));
 
-    // PASO 2: casos asignados específicamente a este usuario
+    let snapAsignados: any[] = [];
     if (apodoUsuario || emailUsuario) {
       const variantes = this._buildVariantes(apodoUsuario, emailUsuario);
       const arr = Array.from(variantes).filter(v => v.length >= 2);
       const chunks: string[][] = [];
       for (let i = 0; i < arr.length; i += 30) chunks.push(arr.slice(i, i + 30));
-      const snaps = await Promise.all(
-        chunks.map(ch => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', 'in', ch))))
-      );
-      for (const snap of snaps) {
-        const found = snap.docs.find(d => !this._esVentaSi(d.data()) && matchPerfil(d.data()));
+      const [snapLibre, ...snapsAsig] = await Promise.all([
+        qLibre,
+        ...chunks.map(ch => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', 'in', ch))))
+      ]);
+      // Preferir asignado
+      for (const snap of snapsAsig) {
+        const found = snap.docs.find((d: any) => !this._esVentaSi(d.data()) && matchPerfil(d.data()));
         if (found) return { id: found.id, ...found.data() } as CasoModel;
       }
+      // Fallback: libre
+      const libre = snapLibre.docs.find((d: any) => !this._esVentaSi(d.data()) && matchPerfil(d.data()));
+      if (libre) return { id: libre.id, ...libre.data() } as CasoModel;
+    } else {
+      const snapLibre = await qLibre;
+      const libre = snapLibre.docs.find((d: any) => !this._esVentaSi(d.data()) && matchPerfil(d.data()));
+      if (libre) return { id: libre.id, ...libre.data() } as CasoModel;
     }
 
-    // PASO 3: fallback — registros viejos sin campo ASGINADO
+    // Fallback: registros viejos sin campo ASGINADO
     const snapAll = await getDocs(query(ref, where('procesado', '==', false), limit(1000)));
     const legacy = snapAll.docs.find(d => d.data()['ASGINADO'] === undefined && !this._esVentaSi(d.data()) && matchPerfil(d.data()));
     if (legacy) return { id: legacy.id, ...legacy.data() } as CasoModel;
@@ -135,11 +211,23 @@ export class FirestoreService {
   }
 
   async getCasosVentaSi(): Promise<CasoModel[]> {
-    const ref = collection(this.db, COL_CASOS);
-    const snap = await getDocs(query(ref, where('procesado', '==', false)));
-    return snap.docs
-      .filter(d => this._esVentaSi(d.data()))
-      .map(d => ({ id: d.id, ...d.data() } as CasoModel));
+    // Nueva colección dedicada (nuevos uploads)
+    const [snapNuevo, snapOld] = await Promise.all([
+      getDocs(query(collection(this.db, COL_CASOS_VENTA_SI), where('procesado', '==', false))),
+      // BDmadre legacy — VentaSI que se subieron antes de la separación de colecciones
+      getDocs(query(collection(this.db, COL_CASOS), where('esVentaSi', '==', true))),
+    ]);
+    // También buscar VentaSI viejos sin campo esVentaSi (client-side filter)
+    const snapLegacy = await getDocs(query(collection(this.db, COL_CASOS), where('procesado', '==', false)));
+    const legacyVentaSi = snapLegacy.docs
+      .filter(d => d.data()['esVentaSi'] === undefined && this._esVentaSi(d.data()));
+
+    const seen = new Set<string>();
+    const todos: CasoModel[] = [];
+    for (const d of [...snapNuevo.docs, ...snapOld.docs, ...legacyVentaSi]) {
+      if (!seen.has(d.id)) { seen.add(d.id); todos.push({ id: d.id, ...d.data() } as CasoModel); }
+    }
+    return todos;
   }
 
   /** Elimina todos los documentos de BDmadre (procesados y no procesados) */
@@ -225,6 +313,24 @@ export class FirestoreService {
 
   async reservarCaso(id: string, apodo: string): Promise<void> {
     await updateDoc(doc(this.db, COL_CASOS, id), { ASGINADO: apodo });
+    this._incrementarContadorCola(apodo).catch(() => {});
+  }
+
+  async eliminarTodosCasosDeApodo(apodo: string): Promise<number> {
+    const ref = collection(this.db, COL_CASOS);
+    const variantes = [apodo, apodo.toLowerCase(), apodo.toUpperCase(),
+      apodo.charAt(0).toUpperCase() + apodo.slice(1).toLowerCase()];
+    const snaps = await Promise.all(
+      [...new Set(variantes)].map(v => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', '==', v))))
+    );
+    const ids = [...new Set(snaps.flatMap(s => s.docs.map(d => d.id)))];
+    const chunkSize = 499;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const batch = writeBatch(this.db);
+      ids.slice(i, i + chunkSize).forEach(id => batch.delete(doc(this.db, COL_CASOS, id)));
+      await batch.commit();
+    }
+    return ids.length;
   }
 
   async liberarTodosCasosDeApodo(apodo: string): Promise<number> {
@@ -244,13 +350,13 @@ export class FirestoreService {
     return ids.length;
   }
 
-  async liberarCaso(id: string): Promise<void> {
+  async liberarCaso(id: string, apodoAnterior?: string): Promise<void> {
     await updateDoc(doc(this.db, COL_CASOS, id), { ASGINADO: '' });
+    if (apodoAnterior) this._decrementarContadorCola(apodoAnterior).catch(() => {});
   }
 
   async eliminarDuplicados(onProgress?: (procesados: number, total: number) => void): Promise<{ eliminados: number }> {
     const ref = collection(this.db, COL_CASOS);
-    const snap = await getDocs(ref);
 
     // Clave primaria: CUIL (normalizado). Fallback: Trabajador||Fecha_Accidente
     const claveDe = (data: any): string => {
@@ -261,29 +367,43 @@ export class FirestoreService {
       return `nombre:${trabajador}||${fecha}`;
     };
 
-    const visto = new Map<string, string>(); // clave → id a conservar
+    // Procesar con cursor en páginas de 500 para evitar cargar toda la colección en memoria
+    const PAGE_SIZE = 500;
+    const visto = new Map<string, { id: string; procesado: boolean }>();
     const aEliminar: string[] = [];
+    let cursor: any = null;
+    let procesadosTotal = 0;
 
-    for (const d of snap.docs) {
-      const data = d.data();
-      const clave = claveDe(data);
-      if (clave === 'cuil:' || clave === 'nombre:||') continue;
+    while (true) {
+      const q = cursor
+        ? query(ref, orderBy('__name__'), startAfter(cursor), limit(PAGE_SIZE))
+        : query(ref, orderBy('__name__'), limit(PAGE_SIZE));
+      const snap = await getDocs(q);
+      if (snap.empty) break;
 
-      if (visto.has(clave)) {
-        const idExistente = visto.get(clave)!;
-        const existenteData = snap.docs.find(x => x.id === idExistente)?.data();
-        const existenteProcesado = existenteData?.['procesado'] === true;
+      for (const d of snap.docs) {
+        const data = d.data();
+        const clave = claveDe(data);
+        if (clave === 'cuil:' || clave === 'nombre:||') continue;
         const actualProcesado = data['procesado'] === true;
-        if (actualProcesado && !existenteProcesado) {
-          // Conservar el procesado (actual), eliminar el sin procesar (existente)
-          aEliminar.push(idExistente);
-          visto.set(clave, d.id);
+
+        if (visto.has(clave)) {
+          const existente = visto.get(clave)!;
+          if (actualProcesado && !existente.procesado) {
+            aEliminar.push(existente.id);
+            visto.set(clave, { id: d.id, procesado: true });
+          } else {
+            aEliminar.push(d.id);
+          }
         } else {
-          aEliminar.push(d.id);
+          visto.set(clave, { id: d.id, procesado: actualProcesado });
         }
-      } else {
-        visto.set(clave, d.id);
       }
+
+      procesadosTotal += snap.docs.length;
+      onProgress?.(procesadosTotal, procesadosTotal);
+      cursor = snap.docs[snap.docs.length - 1];
+      if (snap.docs.length < PAGE_SIZE) break;
     }
 
     let eliminados = 0;
@@ -304,18 +424,70 @@ export class FirestoreService {
 
   async marcarProcesado(id: string, estado: EstadoCaso, procesadoPor: string, asignado: string = '', caso?: any, comentario = ''): Promise<void> {
     const ts = new Date().toISOString();
-    const entrada: any = { estado, timestamp: ts, por: procesadoPor, apodo: asignado || procesadoPor };
+    const apodoEfectivo = asignado || procesadoPor;
+    const entrada: any = { estado, timestamp: ts, por: procesadoPor, apodo: apodoEfectivo };
     if (comentario) entrada.comentario = comentario;
     await updateDoc(doc(this.db, COL_CASOS, id), {
       procesado: true,
       estado,
       procesadoPor,
-      ASGINADO: asignado || procesadoPor,
+      ASGINADO: apodoEfectivo,
       procesadoTimestamp: serverTimestamp(),
       historialEstados: arrayUnion(entrada)
     });
     if (estado === 'acepto' && caso) {
-      await this.crearNotificacionAcepto(id, caso, asignado || procesadoPor);
+      await this.crearNotificacionAcepto(id, caso, apodoEfectivo);
+    }
+    // Actualizar stats del llamador (fire & forget)
+    this._incrementarStatsLlamador(procesadoPor, apodoEfectivo, estado).catch(() => {});
+    // Decrementar contador de cola del llamador
+    this._decrementarContadorCola(apodoEfectivo).catch(() => {});
+  }
+
+  private async _incrementarStatsLlamador(email: string, apodo: string, estado: EstadoCaso): Promise<void> {
+    if (!email) return;
+    const ref = doc(this.db, COL_STATS_LLAMADORES, email.replace(/[^a-zA-Z0-9]/g, '_'));
+    const estadoField = this._estadoAField(estado);
+    const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const upd: Record<string, any> = {
+      email,
+      apodo,
+      consumidos: increment(1),
+      ultimaActividad: serverTimestamp(),
+    };
+    if (estadoField) upd[estadoField] = increment(1);
+    upd[`hoy_${hoy}`] = increment(1); // contactos de hoy
+    try {
+      await updateDoc(ref, upd);
+    } catch {
+      await setDoc(ref, { email, apodo, consumidos: 1, [estadoField || 'otro']: 1, [`hoy_${hoy}`]: 1, ultimaActividad: serverTimestamp() });
+    }
+  }
+
+  private _estadoAField(estado: string): string {
+    const map: Record<string, string> = {
+      acepto: 'acepto', pendiente: 'interesado', interesado: 'interesado',
+      nocontesto: 'interesado', sincontacto: 'sinContacto',
+      conabogado: 'conAbogado', nointeresado: 'noInteresado',
+    };
+    return map[estado] ?? 'otro';
+  }
+
+  private async _decrementarContadorCola(apodo: string): Promise<void> {
+    if (!apodo) return;
+    const ref = doc(this.db, COL_COLA_CONTADORES, apodo);
+    try {
+      await updateDoc(ref, { cantidad: increment(-1) });
+    } catch { /* no existe el doc todavía, ignorar */ }
+  }
+
+  private async _incrementarContadorCola(apodo: string): Promise<void> {
+    if (!apodo) return;
+    const ref = doc(this.db, COL_COLA_CONTADORES, apodo);
+    try {
+      await updateDoc(ref, { cantidad: increment(1) });
+    } catch {
+      await setDoc(ref, { apodo, cantidad: 1 });
     }
   }
 
@@ -394,57 +566,45 @@ export class FirestoreService {
     }
   }
 
-  async getHistorialPor(email: string, apodo?: string): Promise<CasoModel[]> {
+  async getHistorialPor(email: string, apodo?: string, pageSize = 200): Promise<CasoModel[]> {
     const ref = collection(this.db, COL_CASOS);
     const apodoEfectivo = apodo && apodo !== email ? apodo : email.split('@')[0];
-    const emailPrefix = email.split('@')[0];
-
-    // Tokens para fuzzy match client-side
-    const tokens = new Set<string>();
-    const addTokens = (s: string) => {
-      if (!s || s.length < 2) return;
-      tokens.add(s.toLowerCase());
-      s.split(/\s+/).forEach(w => {
-        const clean = w.replace(/\.$/, '').toLowerCase();
-        if (clean.length >= 2) tokens.add(clean);
-      });
-    };
-    addTokens(apodoEfectivo);
-    addTokens(email);
-    addTokens(emailPrefix);
-
     const ESTADOS_VALIDOS = new Set(['acepto', 'pendiente', 'interesado', 'nocontesto', 'sincontacto', 'conabogado', 'nointeresado']);
 
-    // Scan ALL casos con estado válido (procesado true o false — cambiarEstadoCaso no fuerza procesado=true)
-    const [snapTrue, snapFalse] = await Promise.all([
-      getDocs(query(ref, where('procesado', '==', true))),
-      getDocs(query(ref, where('procesado', '==', false))),
-    ]);
+    // Construir variantes del apodo para queries indexadas
+    const variantes = this._buildVariantes(apodoEfectivo, email);
+    const arr = Array.from(variantes).filter(v => v.length >= 2);
+    const chunks: string[][] = [];
+    for (let i = 0; i < arr.length; i += 30) chunks.push(arr.slice(i, i + 30));
+
+    // Queries indexadas por ASGINADO (sin full scan)
+    const queriesAsginado = chunks.map(ch =>
+      getDocs(query(ref, where('ASGINADO', 'in', ch), limit(pageSize)))
+    );
+    // Query por procesadoPor
+    const queryProcesadoPor = getDocs(query(ref, where('procesadoPor', '==', email), limit(pageSize)));
+
+    const snaps = await Promise.all([queryProcesadoPor, ...queriesAsginado]);
 
     const seen = new Set<string>();
     const casos: CasoModel[] = [];
-    for (const d of [...snapTrue.docs, ...snapFalse.docs]) {
-      if (seen.has(d.id)) continue;
-      const data = d.data() as any;
-      if (!ESTADOS_VALIDOS.has(data['estado'])) continue;
-
-      const asginado = (data['ASGINADO'] ?? '').toString().toLowerCase();
-      const procesadoPor = (data['procesadoPor'] ?? '').toString().toLowerCase();
-
-      const matchAsginado = asginado && [...tokens].some(t => asginado.includes(t) || t.includes(asginado));
-      const matchProcesadoPor = procesadoPor === email.toLowerCase() || procesadoPor.includes(emailPrefix.toLowerCase());
-
-      if (matchAsginado || matchProcesadoPor) {
+    for (const snap of snaps) {
+      for (const d of snap.docs) {
+        if (seen.has(d.id)) continue;
+        const data = d.data() as any;
+        if (!ESTADOS_VALIDOS.has(data['estado'])) continue;
         seen.add(d.id);
         casos.push({ id: d.id, ...data } as CasoModel);
       }
     }
 
-    return casos.sort((a, b) => {
-      const ta = a.procesadoTimestamp ?? '';
-      const tb = b.procesadoTimestamp ?? '';
-      return tb > ta ? 1 : -1;
-    });
+    return casos
+      .sort((a, b) => {
+        const ta = a.procesadoTimestamp ?? '';
+        const tb = b.procesadoTimestamp ?? '';
+        return tb > ta ? 1 : -1;
+      })
+      .slice(0, pageSize);
   }
 
   async getCasosPorEstado(estado: string): Promise<CasoModel[]> {
@@ -545,15 +705,20 @@ export class FirestoreService {
     let subidos = 0;
     let errores = 0;
 
-    for (let i = 0; i < filas.length; i += chunkSize) {
-      const chunk = filas.slice(i, i + chunkSize);
-      const batch = writeBatch(this.db);
+    // Separar VentaSI del resto
+    const filasNormales = filas.filter(f => !this._esVentaSi(f));
+    const filasVentaSi = filas.filter(f => this._esVentaSi(f));
 
+    // Subir casos normales a BDmadre
+    for (let i = 0; i < filasNormales.length; i += chunkSize) {
+      const chunk = filasNormales.slice(i, i + chunkSize);
+      const batch = writeBatch(this.db);
       for (const fila of chunk) {
         const ref = doc(collection(this.db, COL_CASOS));
         batch.set(ref, {
           ...fila,
           ASGINADO: (fila['ASGINADO'] ?? '').toString().trim(),
+          esVentaSi: false,
           procesado: false,
           estado: '',
           procesadoPor: '',
@@ -561,16 +726,35 @@ export class FirestoreService {
           creadoEn: serverTimestamp()
         });
       }
-
-      try {
-        await batch.commit();
-        subidos += chunk.length;
-      } catch {
-        errores += chunk.length;
-      }
-
+      try { await batch.commit(); subidos += chunk.length; }
+      catch { errores += chunk.length; }
       onProgress?.(subidos, total);
     }
+
+    // Subir VentaSI a su propia colección
+    for (let i = 0; i < filasVentaSi.length; i += chunkSize) {
+      const chunk = filasVentaSi.slice(i, i + chunkSize);
+      const batch = writeBatch(this.db);
+      for (const fila of chunk) {
+        const ref = doc(collection(this.db, COL_CASOS_VENTA_SI));
+        batch.set(ref, {
+          ...fila,
+          ASGINADO: (fila['ASGINADO'] ?? '').toString().trim(),
+          esVentaSi: true,
+          procesado: false,
+          estado: '',
+          procesadoPor: '',
+          procesadoTimestamp: null,
+          creadoEn: serverTimestamp()
+        });
+      }
+      try { await batch.commit(); subidos += chunk.length; }
+      catch { errores += chunk.length; }
+      onProgress?.(subidos, total);
+    }
+
+    // Actualizar contador de cola
+    await this._actualizarContador(filasNormales.length, 0);
 
     return { total, subidos, errores };
   }
@@ -837,7 +1021,8 @@ export class FirestoreService {
     desdeApodo: string,
     hastaApodo: string,
     hastaEmail: string,
-    estados: string[]
+    estados: string[],
+    devolverACola: boolean = false
   ): Promise<number> {
     if (!desdeApodo || !hastaApodo || estados.length === 0) return 0;
     const ref = collection(this.db, COL_CASOS);
@@ -859,7 +1044,17 @@ export class FirestoreService {
     for (let i = 0; i < filtrados.length; i += chunkSize) {
       const batch = writeBatch(this.db);
       filtrados.slice(i, i + chunkSize).forEach(d => {
-        batch.update(d.ref, { ASGINADO: hastaApodo, procesadoPor: hastaEmail });
+        if (devolverACola) {
+          batch.update(d.ref, {
+            ASGINADO: hastaApodo,
+            procesado: false,
+            estado: '',
+            procesadoPor: '',
+            procesadoTimestamp: null,
+          });
+        } else {
+          batch.update(d.ref, { ASGINADO: hastaApodo, procesadoPor: hastaEmail });
+        }
       });
       await batch.commit();
     }
@@ -876,8 +1071,13 @@ export class FirestoreService {
     };
     add(desdeApodo);
     const arr = Array.from(variantes);
+    const ESTADOS_NO_MOVER = new Set(['acepto', 'interesado', 'pendiente', 'nocontesto']);
     const snaps = await Promise.all(arr.map(v => getDocs(query(ref, where('ASGINADO', '==', v)))));
-    const todos = [...new Map(snaps.flatMap(s => s.docs).map(d => [d.id, d])).values()];
+    const todos = [...new Map(snaps.flatMap(s => s.docs).map(d => [d.id, d])).values()]
+      .filter(d => {
+        const estado = (d.data()['estado'] ?? '').toString();
+        return !ESTADOS_NO_MOVER.has(estado);
+      });
     const chunkSize = 499;
     for (let i = 0; i < todos.length; i += chunkSize) {
       const batch = writeBatch(this.db);
@@ -887,6 +1087,37 @@ export class FirestoreService {
       await batch.commit();
     }
     return todos.length;
+  }
+
+  /** Busca por procesadoPor (email) y actualiza ASGINADO al nuevo apodo.
+   *  Cubre casos donde ASGINADO quedó como email en lugar de apodo. */
+  async sincronizarApodoPorEmail(emailOrigen: string, apodoNuevo: string, devolverACola = false): Promise<number> {
+    const ESTADOS_NO_MOVER = new Set(['acepto', 'interesado', 'pendiente', 'nocontesto']);
+    const ref = collection(this.db, COL_CASOS);
+    const snap = await getDocs(query(ref, where('procesadoPor', '==', emailOrigen)));
+    const aActualizar = snap.docs.filter(d => {
+      const estado = (d.data()['estado'] ?? '').toString();
+      return !ESTADOS_NO_MOVER.has(estado);
+    });
+    const chunkSize = 499;
+    for (let i = 0; i < aActualizar.length; i += chunkSize) {
+      const batch = writeBatch(this.db);
+      aActualizar.slice(i, i + chunkSize).forEach(d => {
+        if (devolverACola) {
+          batch.update(d.ref, {
+            ASGINADO: apodoNuevo,
+            procesado: false,
+            estado: '',
+            procesadoPor: '',
+            procesadoTimestamp: null,
+          });
+        } else {
+          batch.update(d.ref, { ASGINADO: apodoNuevo });
+        }
+      });
+      await batch.commit();
+    }
+    return aActualizar.length;
   }
 
   async repararAsginadoTipoCaso(): Promise<number> {
@@ -953,13 +1184,31 @@ export class FirestoreService {
 
   async getCantidadEnCola(): Promise<number> {
     const ref = collection(this.db, COL_CASOS);
-    const snap = await getDocs(query(ref, where('procesado', '==', false)));
     const BASURA = new Set(['asginado', 'asignado', 'assigned', 'apodo', 'llamador', 'nombre']);
-    return snap.docs.filter(d => {
+    // Docs nuevos con esVentaSi=false (query eficiente)
+    const [snapNuevos, snapTodos] = await Promise.all([
+      getDocs(query(ref, where('procesado', '==', false), where('esVentaSi', '==', false))),
+      getDocs(query(ref, where('procesado', '==', false))),
+    ]);
+    // Docs legacy sin campo esVentaSi — filtrar client-side
+    const seen = new Set(snapNuevos.docs.map(d => d.id));
+    const legacyCount = snapTodos.docs.filter(d => {
+      if (seen.has(d.id)) return false;
+      if (this._esVentaSi(d.data())) return false;
+      return true;
+    }).length;
+    // Solo contar los sin asignar (libres)
+    const libresNuevos = snapNuevos.docs.filter(d => {
+      const raw = (d.data()['ASGINADO'] ?? '').toString().trim();
+      return !raw || BASURA.has(raw.toLowerCase());
+    }).length;
+    const libresLegacy = snapTodos.docs.filter(d => {
+      if (seen.has(d.id)) return false;
       if (this._esVentaSi(d.data())) return false;
       const raw = (d.data()['ASGINADO'] ?? '').toString().trim();
       return !raw || BASURA.has(raw.toLowerCase());
     }).length;
+    return libresNuevos + libresLegacy;
   }
 
   // ── Noticias ──────────────────────────────────────────────
@@ -1012,10 +1261,10 @@ export class FirestoreService {
       if (!email) continue;
 
       if (!mapa.has(email)) {
-        // ASGINADO only if it's an actual apodo (not an email address)
+        // Apodo actual del usuario tiene prioridad; ASGINADO de cada caso puede ser stale
         const rawAsginado = data['ASGINADO']?.trim() ?? '';
         const apodoFromCase = rawAsginado && !rawAsginado.includes('@') ? rawAsginado : null;
-        const nombre = apodoFromCase || apodoMap.get(email.toLowerCase()) || email.split('@')[0];
+        const nombre = apodoMap.get(email.toLowerCase()) || apodoFromCase || email.split('@')[0];
         mapa.set(email, {
           email,
           nombre,
@@ -1029,11 +1278,6 @@ export class FirestoreService {
       }
 
       const entry = mapa.get(email)!;
-      // Update nombre if we now have a better value (ASGINADO) and currently showing raw email
-      const asginadoActual = data['ASGINADO']?.trim() ?? '';
-      if (asginadoActual && !asginadoActual.includes('@') && entry.nombre !== asginadoActual) {
-        entry.nombre = asginadoActual;
-      }
       entry.consumidos++;
 
       switch (data['estado']) {

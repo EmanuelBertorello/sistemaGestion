@@ -153,15 +153,14 @@ export class DashboardAdmin implements OnInit, OnDestroy {
       this.fs.getCantidadEnCola().then(n => this.zone.run(() => { this.casosEnCola = n; this.cdr.detectChanges(); }));
     }, 15000); // cada 15s — no martillar Firestore
 
-    // Carga inicial historial
-    this.fs.getHistorialCompleto().then(h => {
-      this.zone.run(() => { this.historial = h; this.cargandoHistorial = false; this.cdr.detectChanges(); });
+    // Historial en tiempo real con onSnapshot (reemplaza polling cada 30s)
+    this.unsubHistorial = this.fs.escucharHistorialCompleto(casos => {
+      this.zone.run(() => {
+        this.historial = casos;
+        this.cargandoHistorial = false;
+        this.cdr.detectChanges();
+      });
     });
-    // Polling historial cada 30s
-    this.historialInterval = setInterval(async () => {
-      const h = await this.fs.getHistorialCompleto();
-      this.zone.run(() => { this.historial = h; this.cdr.detectChanges(); });
-    }, 30000);
     this.unsubNotif = this.fs.escucharNotificacionesAcepto(this.adminInitMs, notifs => {
       this.zone.run(() => {
         if (notifs.length > this.prevNotifCount) {
@@ -191,7 +190,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.unsubPresencia?.();
     this.unsubNoticias?.();
     this.unsubHistorial?.();
-    if (this.historialInterval) clearInterval(this.historialInterval);
+    if (this.historialInterval) clearInterval(this.historialInterval); // legacy, puede estar vacío
     if (this.colaInterval) clearInterval(this.colaInterval);
   }
 
@@ -353,6 +352,8 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   estadoVentaSi: 'idle' | 'buscando' | 'done' | 'error' = 'idle';
   ventaSiEliminados = 0;
   ventaSiError = '';
+  migrando = false;
+  migradosCount = 0;
 
   // ── Eliminar sin valor de Venta ───────────────────────────
   estadoSinVenta: 'idle' | 'buscando' | 'done' | 'error' = 'idle';
@@ -378,9 +379,10 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   perfilesConfig: Record<string, string> = {};
   todosLlamadores: Array<{ apodo: string; perfil: string; limitePendientes: number }> = [];
 
-  // Liberar casos por llamador
+  // Liberar/Eliminar casos por llamador
   liberandoApodo: Record<string, boolean> = {};
   liberadosMensaje: Record<string, string> = {};
+  eliminandoApodo: Record<string, boolean> = {};
 
   descargandoCola = false;
 
@@ -446,6 +448,45 @@ export class DashboardAdmin implements OnInit, OnDestroy {
       this.estadoVaciar = 'error';
     }
     this.cdr.detectChanges();
+  }
+
+  archivando = false;
+  archivadosCount = 0;
+
+  async archivarCasosViejos(): Promise<void> {
+    this.archivando = true;
+    this.archivadosCount = 0;
+    this.cdr.detectChanges();
+    try {
+      this.archivadosCount = await this.fs.archivarCasosViejos(90, n => {
+        this.archivadosCount = n;
+        this.cdr.detectChanges();
+      });
+      alert(`✓ ${this.archivadosCount} casos archivados (procesados hace >90 días).`);
+    } catch (e: any) {
+      alert('Error: ' + (e?.message ?? e));
+    } finally {
+      this.archivando = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async migrarVentaSiExistente(): Promise<void> {
+    this.migrando = true;
+    this.migradosCount = 0;
+    this.cdr.detectChanges();
+    try {
+      this.migradosCount = await this.fs.migrarVentaSiAColeccionSeparada(n => {
+        this.migradosCount = n;
+        this.cdr.detectChanges();
+      });
+      alert(`✓ ${this.migradosCount} casos VentaSI migrados a colección separada.`);
+    } catch (e: any) {
+      alert('Error: ' + (e?.message ?? e));
+    } finally {
+      this.migrando = false;
+      this.cdr.detectChanges();
+    }
   }
 
   async eliminarVentaSi() {
@@ -1177,6 +1218,16 @@ export class DashboardAdmin implements OnInit, OnDestroy {
         this.perfilesConfig[ll.apodo] = ll.perfil;
         if (!(ll.apodo in this.limitesConfig)) this.limitesConfig[ll.apodo] = ll.limitePendientes;
       }
+      // Cargar config para apodos de colaEstados que no estén en todosLlamadores (mismatch de casing)
+      const apodosYaCargados = new Set(this.todosLlamadores.map(l => l.apodo.toLowerCase()));
+      for (const { apodo } of this.colaEstados) {
+        if (apodo === '— Sin asignar —') continue;
+        if (!apodosYaCargados.has(apodo.toLowerCase())) {
+          const cfg = await this.fs.getConfigLlamador(apodo);
+          this.perfilesConfig[apodo] = cfg.perfil ?? '';
+          this.limitesConfig[apodo] = cfg.limitePendientes;
+        }
+      }
     } finally {
       this.colaCargando = false;
       this.cdr.detectChanges();
@@ -1234,6 +1285,19 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     }
   }
 
+  async eliminarCasosApodo(apodo: string): Promise<void> {
+    this.eliminandoApodo[apodo] = true;
+    this.cdr.detectChanges();
+    try {
+      const n = await this.fs.eliminarTodosCasosDeApodo(apodo);
+      await this.cargarDatosCola();
+    } catch {
+    } finally {
+      this.eliminandoApodo[apodo] = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   async guardarPerfilLlamador(apodo: string): Promise<void> {
     const perfil = this.perfilesConfig[apodo] ?? '';
     await this.fs.setPerfilLlamador(apodo, perfil);
@@ -1244,8 +1308,22 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   reasigDesde = '';
   reasigHasta = '';
   reasigEstados: Record<string, boolean> = { nointeresado: false, conabogado: false, sincontacto: false };
+  reasigDevolverACola = false;
   reasignandoHist = false;
   reasigResultado = 0;
+
+  // ── Reasignación de cola (no procesados) ──────────────────
+  colaReasigDesde = '';
+  colaReasigHasta = '';
+  reasignandoCola = false;
+  colaReasigResultado = -1;
+
+  // ── Sincronizar apodo por email (retroactivo) ─────────────
+  sincEmailOrigen = '';
+  sincApodoDestino = '';
+  sincDevolverACola = false;
+  sincronizando = false;
+  sincResultado = -1;
 
   async cargarUsuariosReasig(): Promise<void> {
     const usuarios = await this.fs.getUsuarios();
@@ -1274,7 +1352,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.cdr.detectChanges();
     try {
       const n = await this.fs.reasignarCasosPorEstado(
-        this.reasigDesde, this.reasigHasta, hastaUser.email, estados
+        this.reasigDesde, this.reasigHasta, hastaUser.email, estados, this.reasigDevolverACola
       );
       this.reasigResultado = n;
       alert(`✓ ${n} casos reasignados de ${this.reasigDesde} → ${this.reasigHasta}`);
@@ -1282,6 +1360,54 @@ export class DashboardAdmin implements OnInit, OnDestroy {
       alert('Error: ' + (e?.message ?? e));
     } finally {
       this.reasignandoHist = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async ejecutarSincronizacion(): Promise<void> {
+    if (!this.sincEmailOrigen || !this.sincApodoDestino) {
+      alert('Completá email y apodo destino.');
+      return;
+    }
+    if (!confirm(`¿Sincronizar todos los casos de "${this.sincEmailOrigen}" al apodo "${this.sincApodoDestino}"?`)) return;
+    this.sincronizando = true;
+    this.sincResultado = -1;
+    this.cdr.detectChanges();
+    try {
+      const [n1] = await Promise.all([
+        this.fs.sincronizarApodoPorEmail(this.sincEmailOrigen, this.sincApodoDestino, this.sincDevolverACola),
+      ]);
+      this.sincResultado = n1;
+      await this.cargarDatosCola();
+    } catch (e: any) {
+      alert('Error: ' + (e?.message ?? e));
+    } finally {
+      this.sincronizando = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async ejecutarReasignacionCola(): Promise<void> {
+    if (!this.colaReasigDesde || !this.colaReasigHasta) {
+      alert('Seleccioná ambos llamadores.');
+      return;
+    }
+    if (this.colaReasigDesde === this.colaReasigHasta) {
+      alert('Los llamadores deben ser distintos.');
+      return;
+    }
+    if (!confirm(`¿Reasignar TODOS los casos en cola de "${this.colaReasigDesde}" a "${this.colaReasigHasta}"?`)) return;
+    this.reasignandoCola = true;
+    this.colaReasigResultado = -1;
+    this.cdr.detectChanges();
+    try {
+      const n = await this.fs.reasignarCasosDe(this.colaReasigDesde, this.colaReasigHasta);
+      this.colaReasigResultado = n;
+      await this.cargarDatosCola();
+    } catch (e: any) {
+      alert('Error: ' + (e?.message ?? e));
+    } finally {
+      this.reasignandoCola = false;
       this.cdr.detectChanges();
     }
   }

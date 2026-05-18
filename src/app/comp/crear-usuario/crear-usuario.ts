@@ -87,6 +87,7 @@ export class CrearUsuario implements OnInit {
       this.errorMsg = this.mapError(err.code);
     } finally {
       this.loading = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -117,9 +118,16 @@ export class CrearUsuario implements OnInit {
     this.guardandoApodo = true;
     this.cdr.detectChanges();
     try {
-      if (this.apodoEdit !== u.apodo) {
-        await this.fs.actualizarApodo(u.uid, this.apodoEdit.trim());
-        u.apodo = this.apodoEdit.trim();
+      const apodoViejo = (u.apodo ?? '').trim();
+      const apodoNuevo = this.apodoEdit.trim();
+      if (apodoNuevo !== apodoViejo) {
+        await this.fs.actualizarApodo(u.uid, apodoNuevo);
+        if (apodoViejo) {
+          await this.fs.reasignarCasosDe(apodoViejo, apodoNuevo);
+        }
+        // También sincroniza por email (casos donde ASGINADO quedó como email)
+        await this.fs.sincronizarApodoPorEmail(u.email, apodoNuevo);
+        u.apodo = apodoNuevo;
       }
       if (this.emailEdit.trim() && this.emailEdit.trim() !== u.email) {
         await this.fs.actualizarEmailUsuario(u.uid, this.emailEdit.trim());
