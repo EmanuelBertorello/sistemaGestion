@@ -578,10 +578,17 @@
 
         @if (!cargandoCasosEstado && casosEstado.length > 0) {
           <div class="card overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 class="text-sm font-bold text-gray-600 uppercase tracking-wider">
-                {{ seccion.emoji }} {{ casosEstado.length }} caso(s) — {{ seccion.label }}
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-3 flex-wrap">
+              <h3 class="text-sm font-bold text-gray-600 uppercase tracking-wider flex-1">
+                {{ seccion.emoji }} {{ casosEstadoFiltrado.length }}/{{ casosEstado.length }} caso(s) — {{ seccion.label }}
               </h3>
+              <select [(ngModel)]="casosEstadoFiltroLlamador"
+                class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white">
+                <option value="">Todos los llamadores</option>
+                @for (ll of llamadoresEnEstado; track ll) {
+                  <option [value]="ll">{{ ll }}</option>
+                }
+              </select>
             </div>
             <div class="overflow-x-auto">
               <table class="w-full text-sm">
@@ -740,6 +747,7 @@
                     <th class="text-center px-4 py-3">Estado</th>
                     <th class="text-left px-4 py-3">Llamador</th>
                     <th class="text-left px-4 py-3">Fecha</th>
+                    <th class="text-center px-4 py-3">Anexo</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -757,6 +765,12 @@
                       <td class="px-4 py-3 text-gray-600">{{ c.ASGINADO || c.procesadoPor }}</td>
                       <td class="px-4 py-3 text-gray-400 text-xs">
                         {{ c.procesadoTimestamp?.toDate ? (c.procesadoTimestamp.toDate() | date:'dd/MM/yy HH:mm') : '—' }}
+                      </td>
+                      <td class="px-4 py-3 text-center" (click)="$event.stopPropagation()">
+                        <button (click)="generarAnexo(c)"
+                          class="inline-flex items-center gap-1 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+                          📄 ANEXO
+                        </button>
                       </td>
                     </tr>
                   }
@@ -1132,6 +1146,34 @@
             </div>
           }
 
+          <!-- Buscador de localidades -->
+          <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-2">
+            <p class="text-xs font-bold text-blue-700 uppercase tracking-wider mb-2">Buscar localidades en la BD</p>
+            <div class="flex gap-2 flex-wrap items-center">
+              <input [(ngModel)]="buscarLocalidadTermino" placeholder="Ej: san martin, santa fe..."
+                (keydown.enter)="buscarLocalidades()"
+                class="border border-blue-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1 min-w-40 bg-white"/>
+              <button (click)="buscarLocalidades()" [disabled]="buscandoLocalidades"
+                class="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm transition">
+                {{ buscandoLocalidades ? 'Buscando...' : 'Buscar' }}
+              </button>
+            </div>
+            @if (localidadesEncontradas.length > 0) {
+              <div class="mt-2 flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                @for (loc of localidadesEncontradas; track loc) {
+                  <button (click)="usarLocalidad(loc)"
+                    class="text-xs bg-white border border-blue-200 hover:bg-blue-100 text-blue-800 px-2.5 py-1 rounded-lg transition font-mono">
+                    {{ loc }}
+                  </button>
+                }
+              </div>
+              <p class="text-xs text-blue-500 mt-1">Click en una localidad para usarla como regla</p>
+            }
+            @if (!buscandoLocalidades && localidadesEncontradas.length === 0 && buscarLocalidadTermino) {
+              <p class="text-xs text-gray-400 mt-2">Sin resultados para "{{ buscarLocalidadTermino }}"</p>
+            }
+          </div>
+
           <!-- Agregar nueva regla -->
           <div class="flex gap-2 flex-wrap items-end">
             <div class="flex flex-col gap-1">
@@ -1479,6 +1521,26 @@
               </div>
             </div>
 
+            <!-- Resumen del archivo (preview) -->
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
+                <span class="text-sm text-emerald-700">💰 Venta SI</span>
+                <strong class="text-emerald-700">{{ resumenVentaSi }}</strong>
+              </div>
+              <div class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-blue-50 border border-blue-100">
+                <span class="text-sm text-blue-700">✓ Venta NO</span>
+                <strong class="text-blue-700">{{ resumenVentaNo }}</strong>
+              </div>
+              <div class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-purple-50 border border-purple-100">
+                <span class="text-sm text-purple-700">📊 Volumen</span>
+                <strong class="text-purple-700">{{ resumenVolumen }}</strong>
+              </div>
+              <div class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-orange-50 border border-orange-100">
+                <span class="text-sm text-orange-700">⭐ High Ticket</span>
+                <strong class="text-orange-700">{{ resumenHighTicket }}</strong>
+              </div>
+            </div>
+
             <!-- Botón confirmar -->
             <button (click)="confirmarUpload()"
               class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-4 rounded-2xl transition flex items-center justify-center gap-3 text-base shadow-lg shadow-blue-200">
@@ -1541,6 +1603,10 @@
                 <span>Duplicados eliminados</span>
                 <strong>{{ limpiezaDuplicadosEliminados }}</strong>
               </div>
+              <div class="flex items-center justify-between px-4 py-2 rounded-lg" [class]="limpiezaMigradosVentaSi > 0 || limpiezaPaso.includes('VentaSI') ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-400'">
+                <span>VentaSI migrados a colección</span>
+                <strong>{{ limpiezaMigradosVentaSi }}</strong>
+              </div>
             </div>
             <p class="text-xs text-gray-400">No cerrés esta ventana hasta que termine.</p>
           </div>
@@ -1584,6 +1650,14 @@
                 <span class="text-sm text-blue-700">✓ Venta = NO (cola llamadores)</span>
                 <strong class="text-blue-700">{{ resumenVentaNo }}</strong>
               </div>
+              <div class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-purple-50 border border-purple-100">
+                <span class="text-sm text-purple-700">📊 Volumen (en cola)</span>
+                <strong class="text-purple-700">{{ resumenVolumen }}</strong>
+              </div>
+              <div class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-orange-50 border border-orange-100">
+                <span class="text-sm text-orange-700">⭐ High Ticket (en cola)</span>
+                <strong class="text-orange-700">{{ resumenHighTicket }}</strong>
+              </div>
               <div class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-orange-50 border border-orange-100">
                 <span class="text-sm text-orange-700">⚠ Sin valor de Venta (eliminados)</span>
                 <strong class="text-orange-700">{{ limpiezaSinVentaEliminados }}</strong>
@@ -1591,6 +1665,10 @@
               <div class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-red-50 border border-red-100">
                 <span class="text-sm text-red-600">🗑 Duplicados (eliminados)</span>
                 <strong class="text-red-600">{{ limpiezaDuplicadosEliminados }}</strong>
+              </div>
+              <div class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
+                <span class="text-sm text-emerald-700">🔄 VentaSI migrados a colección</span>
+                <strong class="text-emerald-700">{{ limpiezaMigradosVentaSi }}</strong>
               </div>
             </div>
 

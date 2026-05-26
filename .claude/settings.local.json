@@ -4,7 +4,14 @@
       "Bash(npx firebase *)",
       "Bash(node -e ' *)",
       "Bash(git stash *)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\ema\\\\Desktop\\\\sistemaGestion\" -Force)",
+      "Bash(Select-Object -Property Name, PSIsContainer)",
+      "Bash(Format-Table)",
+      "Bash(curl -s -X POST \"https://firestore.googleapis.com/v1/projects/bdcap-a3b7b/databases/\\(default\\)/documents:runQuery?key=AIzaSyCD6mhPkLrKJ85uyGj9p08jKC9lp84eJnY\" -H \"Content-Type: application/json\" -d \"{\\\\\"structuredQuery\\\\\":{\\\\\"from\\\\\":[{\\\\\"collectionId\\\\\":\\\\\"BDmadre\\\\\"}],\\\\\"where\\\\\":{\\\\\"fieldFilter\\\\\":{\\\\\"field\\\\\":{\\\\\"fieldPath\\\\\":\\\\\"CUIL\\\\\"},\\\\\"op\\\\\":\\\\\"EQUAL\\\\\",\\\\\"value\\\\\":{\\\\\"stringValue\\\\\":\\\\\"20438166719\\\\\"}}},\\\\\"limit\\\\\":5}}\")",
+      "Bash(firebase firestore *)",
+      "Bash(firebase use *)",
+      "Bash(firebase login *)"
     ]
   }
 }

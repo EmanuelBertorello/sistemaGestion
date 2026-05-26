@@ -95,6 +95,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   // ── Casos por estado ──────────────────────────────────────
   casosEstado: CasoModel[] = [];
   cargandoCasosEstado = false;
+  casosEstadoFiltroLlamador = '';
 
   // ── Modal detalle llamador ─────────────────────────────────
   modalVisible = false;
@@ -132,8 +133,11 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   limpiezaVentaSiEliminados = 0;
   limpiezaSinVentaEliminados = 0;
   limpiezaDuplicadosEliminados = 0;
+  limpiezaMigradosVentaSi = 0;
   resumenVentaSi = 0;
   resumenVentaNo = 0;
+  resumenVolumen = 0;
+  resumenHighTicket = 0;
 
   get uploadPct(): number {
     if (this.uploadTotal === 0) return 0;
@@ -264,7 +268,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   async cargarEstadisticas() {
     this.cargandoStats = true;
     try {
-      this.llamadores = await this.fs.getEstadisticasAdmin(this.getDesde(this.periodoFiltro));
+      this.llamadores = await this.fs.getEstadisticasAdmin(this.getDesde(this.periodoFiltro), this.auth.getCurrentEmail());
     } catch (e) {
       console.error('Error cargando estadísticas:', e);
     } finally {
@@ -275,6 +279,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
 
   async setSeccion(s: SeccionActiva) {
     this.seccionActiva = s;
+    this.casosEstadoFiltroLlamador = '';
     const estadoMap: Partial<Record<SeccionActiva, string>> = {
       acepto: 'acepto', interesado: 'interesado', sincontacto: 'sincontacto',
       conabogado: 'conabogado', nointeresado: 'nointeresado',
@@ -367,6 +372,11 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   nuevaReglaLocalidad = '';
   nuevaReglaApodo = '';
   colaReglaError = '';
+
+  // Buscador de localidades
+  buscarLocalidadTermino = '';
+  localidadesEncontradas: string[] = [];
+  buscandoLocalidades = false;
   colaAplicandoReglas = false;
   colaReglaAsignados = 0;
 
@@ -587,8 +597,24 @@ export class DashboardAdmin implements OnInit, OnDestroy {
 
   get casosEstadoFiltrado(): CasoModel[] {
     const q = this.historialFiltroApellido.trim().toLowerCase();
-    if (!q) return this.casosEstado;
-    return this.casosEstado.filter(c => (c.Trabajador || '').toLowerCase().includes(q));
+    const ll = this.casosEstadoFiltroLlamador.trim().toLowerCase();
+    return this.casosEstado.filter(c => {
+      if (q && !(c.Trabajador || '').toLowerCase().includes(q)) return false;
+      if (ll) {
+        const cLlamador = ((c.ASGINADO || c.procesadoPor) ?? '').toLowerCase();
+        if (!cLlamador.includes(ll)) return false;
+      }
+      return true;
+    });
+  }
+
+  get llamadoresEnEstado(): string[] {
+    const set = new Set<string>();
+    for (const c of this.casosEstado) {
+      const ll = (c.ASGINADO || c.procesadoPor || '').trim();
+      if (ll) set.add(ll);
+    }
+    return [...set].sort();
   }
 
   get llamadoresUnicos(): string[] {
@@ -625,7 +651,8 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.modalCargando = true;
     this.cdr.detectChanges();
     try {
-      const todos = await this.fs.getHistorialPor(llamador.email);
+      // Pasar el apodo real para que getHistorialPor use tanto email como ASGINADO
+      const todos = await this.fs.getHistorialPor(llamador.email, llamador.nombre);
       const esPendiente = (e: string) => e === 'pendiente' || e === 'interesado' || e === 'nocontesto';
       this.modalCasos = todos.filter(c =>
         estadoKey === 'interesado' ? esPendiente(c.estado) : c.estado === estadoKey
@@ -975,7 +1002,10 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.casoDetalleCambiando = true;
     this.casoDetalleMensaje = '';
     try {
-      await this.fs.cambiarEstadoCaso(this.casoDetalle.id, estado, 'admin', 'Admin', this.casoDetalle);
+      // Preservar al llamador original: el mérito es de quien trabajó el caso, no del admin
+      const emailLlamador = this.casoDetalle.procesadoPor || '';
+      const apodoLlamador = this.casoDetalle.ASGINADO || emailLlamador.split('@')[0] || 'admin';
+      await this.fs.cambiarEstadoCaso(this.casoDetalle.id, estado, emailLlamador || 'admin', apodoLlamador, this.casoDetalle);
       this.casoDetalle = { ...this.casoDetalle, estado };
       this.casoDetalleMensaje = '✓ Estado actualizado';
       // Refrescar lista si está en historial
@@ -1104,10 +1134,28 @@ export class DashboardAdmin implements OnInit, OnDestroy {
         // Leer TODAS las filas como arrays (sin asumir fila de encabezados)
         const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { defval: '', header: 1 }) as any[][];
 
+        // Detectar posición de venta/tipoCaso leyendo la fila de encabezados (fila 0)
+        // para ser resiliente ante cambios de columnas entre versiones del archivo
+        const headerRow = rawRows[0] ?? [];
+        let ventaIdx = 68, tipoCasoIdx = 69; // fallback al formato anterior
+        headerRow.forEach((cell: any, idx: number) => {
+          if (!cell) return;
+          const h = cell.toString().toLowerCase().trim();
+          if (h === 'venta') ventaIdx = idx;
+          else if (h === 'tipocaso') tipoCasoIdx = idx;
+        });
+
         // Fila 0 tiene los datos mezclados con los labels de las últimas columnas → se omite
         const filasMapeadas = rawRows
           .slice(1)
-          .map(row => this.mapearFila(row))
+          .map(row => {
+            const obj = this.mapearFila(row);
+            const vVal = row[ventaIdx];
+            const tVal = row[tipoCasoIdx];
+            obj['venta'] = (vVal == null) ? '' : vVal.toString();
+            obj['tipoCaso'] = (tVal == null) ? '' : tVal.toString();
+            return obj;
+          })
           .filter(f => f['Trabajador'] !== '');  // descartar filas vacías
 
         if (filasMapeadas.length === 0) {
@@ -1118,6 +1166,23 @@ export class DashboardAdmin implements OnInit, OnDestroy {
           this.totalFilas = filasMapeadas.length;
           this.columnas = Object.values(this.EXCEL_COLS);
           this.filaPreview = filasMapeadas.slice(0, 5);
+
+          // Conteos en preview para que el admin vea antes de confirmar
+          this.resumenVentaSi = filasMapeadas.filter(f => {
+            const v = (f['venta'] ?? '').toString().toLowerCase().trim();
+            return v === 'si' || v === 'sí';
+          }).length;
+          this.resumenVentaNo = filasMapeadas.filter(f => {
+            const v = (f['venta'] ?? '').toString().toLowerCase().trim();
+            return v === 'no';
+          }).length;
+          this.resumenVolumen = filasMapeadas.filter(f =>
+            (f['tipoCaso'] ?? '').toString().trim() === '0'
+          ).length;
+          this.resumenHighTicket = filasMapeadas.filter(f =>
+            (f['tipoCaso'] ?? '').toString().trim() === '1'
+          ).length;
+
           this.estadoUpload = 'preview';
         }
       } catch {
@@ -1136,16 +1201,6 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.estadoUpload = 'subiendo';
     this.uploadSubidos = 0;
     this.uploadTotal = this.datosParaSubir.length;
-
-    // Contar venta=SI y venta=NO antes de subir
-    this.resumenVentaSi = this.datosParaSubir.filter(f => {
-      const v = (f['venta'] ?? '').toString().toLowerCase().trim();
-      return v === 'si' || v === 'sí';
-    }).length;
-    this.resumenVentaNo = this.datosParaSubir.filter(f => {
-      const v = (f['venta'] ?? '').toString().toLowerCase().trim();
-      return v === 'no';
-    }).length;
 
     try {
       const result = await this.fs.uploadCasos(
@@ -1171,6 +1226,13 @@ export class DashboardAdmin implements OnInit, OnDestroy {
       const r3 = await this.fs.eliminarDuplicados();
       this.limpiezaDuplicadosEliminados = r3.eliminados;
 
+      this.limpiezaPaso = 'Migrando VentaSI a colección separada...';
+      this.cdr.detectChanges();
+      this.limpiezaMigradosVentaSi = await this.fs.migrarVentaSiAColeccionSeparada(n => {
+        this.limpiezaMigradosVentaSi = n;
+        this.cdr.detectChanges();
+      });
+
       this.estadoUpload = 'done';
     } catch (err: any) {
       this.uploadError = err.message ?? 'Error durante la carga.';
@@ -1194,8 +1256,11 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     this.limpiezaVentaSiEliminados = 0;
     this.limpiezaSinVentaEliminados = 0;
     this.limpiezaDuplicadosEliminados = 0;
+    this.limpiezaMigradosVentaSi = 0;
     this.resumenVentaSi = 0;
     this.resumenVentaNo = 0;
+    this.resumenVolumen = 0;
+    this.resumenHighTicket = 0;
   }
 
   // ── Cola Personal ─────────────────────────────────────────
@@ -1431,6 +1496,22 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   async setSeccionCola(): Promise<void> {
     this.seccionActiva = 'cola';
     await this.cargarDatosCola();
+  }
+
+  async buscarLocalidades(): Promise<void> {
+    this.buscandoLocalidades = true;
+    this.localidadesEncontradas = [];
+    this.cdr.detectChanges();
+    try {
+      this.localidadesEncontradas = await this.fs.buscarLocalidades(this.buscarLocalidadTermino);
+    } finally {
+      this.buscandoLocalidades = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  usarLocalidad(loc: string): void {
+    this.nuevaReglaLocalidad = loc;
   }
 
   async agregarReglaCola(): Promise<void> {

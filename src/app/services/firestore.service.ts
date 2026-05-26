@@ -304,10 +304,12 @@ export class FirestoreService {
     const chunks: string[][] = [];
     for (let i = 0; i < arr.length; i += 30) chunks.push(arr.slice(i, i + 30));
     const snaps = await Promise.all(
-      chunks.map(ch => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', 'in', ch), limit(1))))
+      chunks.map(ch => getDocs(query(ref, where('procesado', '==', false), where('ASGINADO', 'in', ch))))
     );
-    const hit = snaps.find(s => !s.empty);
-    if (hit) return { id: hit.docs[0].id, ...hit.docs[0].data() } as CasoModel;
+    for (const snap of snaps) {
+      const hit = snap.docs.find(d => !this._esVentaSi(d.data()));
+      if (hit) return { id: hit.id, ...hit.data() } as CasoModel;
+    }
     return null;
   }
 
@@ -389,10 +391,14 @@ export class FirestoreService {
 
         if (visto.has(clave)) {
           const existente = visto.get(clave)!;
-          if (actualProcesado && !existente.procesado) {
+          if (actualProcesado && existente.procesado) {
+            // Ambos procesados: son casos legítimos distintos, no borrar ninguno
+          } else if (actualProcesado && !existente.procesado) {
+            // Actual procesado, existente no → borrar el no procesado
             aEliminar.push(existente.id);
             visto.set(clave, { id: d.id, procesado: true });
           } else {
+            // Actual no procesado → borrar el actual (el existente ya está en visto)
             aEliminar.push(d.id);
           }
         } else {
@@ -424,7 +430,7 @@ export class FirestoreService {
 
   async marcarProcesado(id: string, estado: EstadoCaso, procesadoPor: string, asignado: string = '', caso?: any, comentario = ''): Promise<void> {
     const ts = new Date().toISOString();
-    const apodoEfectivo = asignado || procesadoPor;
+    const apodoEfectivo = (asignado || procesadoPor).trim();
     const entrada: any = { estado, timestamp: ts, por: procesadoPor, apodo: apodoEfectivo };
     if (comentario) entrada.comentario = comentario;
     await updateDoc(doc(this.db, COL_CASOS, id), {
@@ -495,10 +501,22 @@ export class FirestoreService {
     const ts = new Date().toISOString();
     const entrada: any = { estado: nuevoEstado, timestamp: ts, por: email, apodo };
     if (comentario) entrada.comentario = comentario;
-    await updateDoc(doc(this.db, COL_CASOS, id), {
+
+    // Si el caso no tiene procesadoPor ni procesado:true, completar con el llamador conocido
+    // para que aparezca en historial, estadísticas y filtros del admin
+    const casoActual = caso as any;
+    const actualizar: Record<string, any> = {
       estado: nuevoEstado,
-      historialEstados: arrayUnion(entrada)
-    });
+      historialEstados: arrayUnion(entrada),
+    };
+    if (casoActual && !casoActual.procesado && email && email !== 'admin') {
+      actualizar['procesado'] = true;
+      actualizar['procesadoPor'] = email;
+      actualizar['ASGINADO'] = apodo || email.split('@')[0];
+      actualizar['procesadoTimestamp'] = serverTimestamp();
+    }
+
+    await updateDoc(doc(this.db, COL_CASOS, id), actualizar);
     if (nuevoEstado === 'acepto' && caso) {
       await this.crearNotificacionAcepto(id, caso, apodo);
     }
@@ -566,7 +584,7 @@ export class FirestoreService {
     }
   }
 
-  async getHistorialPor(email: string, apodo?: string, pageSize = 200): Promise<CasoModel[]> {
+  async getHistorialPor(email: string, apodo?: string, pageSize = 500): Promise<CasoModel[]> {
     const ref = collection(this.db, COL_CASOS);
     const apodoEfectivo = apodo && apodo !== email ? apodo : email.split('@')[0];
     const ESTADOS_VALIDOS = new Set(['acepto', 'pendiente', 'interesado', 'nocontesto', 'sincontacto', 'conabogado', 'nointeresado']);
@@ -577,12 +595,12 @@ export class FirestoreService {
     const chunks: string[][] = [];
     for (let i = 0; i < arr.length; i += 30) chunks.push(arr.slice(i, i + 30));
 
-    // Queries indexadas por ASGINADO (sin full scan)
+    // Sin limit individual: el limit se aplica al final sobre casos ya filtrados.
+    // Así los casos no procesados en cola no consumen el cupo antes del filtro.
     const queriesAsginado = chunks.map(ch =>
-      getDocs(query(ref, where('ASGINADO', 'in', ch), limit(pageSize)))
+      getDocs(query(ref, where('ASGINADO', 'in', ch)))
     );
-    // Query por procesadoPor
-    const queryProcesadoPor = getDocs(query(ref, where('procesadoPor', '==', email), limit(pageSize)));
+    const queryProcesadoPor = getDocs(query(ref, where('procesadoPor', '==', email)));
 
     const snaps = await Promise.all([queryProcesadoPor, ...queriesAsginado]);
 
@@ -592,7 +610,8 @@ export class FirestoreService {
       for (const d of snap.docs) {
         if (seen.has(d.id)) continue;
         const data = d.data() as any;
-        if (!ESTADOS_VALIDOS.has(data['estado'])) continue;
+        // Solo casos efectivamente procesados con estado reconocido
+        if (data['procesado'] !== true || !ESTADOS_VALIDOS.has(data['estado'])) continue;
         seen.add(d.id);
         casos.push({ id: d.id, ...data } as CasoModel);
       }
@@ -881,6 +900,18 @@ export class FirestoreService {
 
   // ── Reglas de asignación (Cola Personal) ─────────────────
 
+  /** Devuelve localidades únicas de BDmadre que contengan el término buscado */
+  async buscarLocalidades(termino: string): Promise<string[]> {
+    const snap = await getDocs(collection(this.db, COL_CASOS));
+    const unicas = new Set<string>();
+    const t = termino.trim().toLowerCase();
+    for (const d of snap.docs) {
+      const loc = (d.data()['Localidad_Ocurrencia'] ?? '').toString().trim();
+      if (loc && (!t || loc.toLowerCase().includes(t))) unicas.add(loc);
+    }
+    return [...unicas].sort();
+  }
+
   async getReglasCola(): Promise<Array<{ id: string; localidad: string; apodo: string }>> {
     const snap = await getDocs(collection(this.db, COL_REGLAS));
     return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
@@ -947,7 +978,7 @@ export class FirestoreService {
       this.getReglasCola(),
       getDocs(query(collection(this.db, COL_CASOS), where('procesado', '==', false)))
     ]);
-    const candidatos = snap.docs.filter(d => !d.data()['ASGINADO']);
+    const candidatos = snap.docs.filter(d => !d.data()['ASGINADO'] && !this._esVentaSi(d.data()));
     let asignados = 0;
     const chunkSize = 499;
     const aActualizar: Array<{ id: string; apodo: string }> = [];
@@ -1039,7 +1070,7 @@ export class FirestoreService {
     for (const snap of snaps) {
       for (const d of snap.docs) todosMap.set(d.id, d);
     }
-    const filtrados = Array.from(todosMap.values()).filter(d => estados.includes(d.data()['estado']));
+    const filtrados = Array.from(todosMap.values()).filter(d => !this._esVentaSi(d.data()) && estados.includes(d.data()['estado']));
     const chunkSize = 499;
     for (let i = 0; i < filtrados.length; i += chunkSize) {
       const batch = writeBatch(this.db);
@@ -1075,6 +1106,7 @@ export class FirestoreService {
     const snaps = await Promise.all(arr.map(v => getDocs(query(ref, where('ASGINADO', '==', v)))));
     const todos = [...new Map(snaps.flatMap(s => s.docs).map(d => [d.id, d])).values()]
       .filter(d => {
+        if (this._esVentaSi(d.data())) return false;
         const estado = (d.data()['estado'] ?? '').toString();
         return !ESTADOS_NO_MOVER.has(estado);
       });
@@ -1096,6 +1128,7 @@ export class FirestoreService {
     const ref = collection(this.db, COL_CASOS);
     const snap = await getDocs(query(ref, where('procesadoPor', '==', emailOrigen)));
     const aActualizar = snap.docs.filter(d => {
+      if (this._esVentaSi(d.data())) return false;
       const estado = (d.data()['estado'] ?? '').toString();
       return !ESTADOS_NO_MOVER.has(estado);
     });
@@ -1237,7 +1270,7 @@ export class FirestoreService {
     });
   }
 
-  async getEstadisticasAdmin(desde?: Date): Promise<LlamadorStats[]> {
+  async getEstadisticasAdmin(desde?: Date, adminEmail?: string): Promise<LlamadorStats[]> {
     // Traer todos los casos procesados
     const ref = collection(this.db, COL_CASOS);
     const q = desde
@@ -1245,13 +1278,17 @@ export class FirestoreService {
       : query(ref, where('procesado', '==', true));
     const snap = await getDocs(q);
 
-    // Traer usuarios para mapear email → apodo
+    // Traer usuarios para mapear email → apodo (solo llamadores, excluye al admin)
     const usuarios = await this.getUsuarios();
     const apodoMap = new Map<string, string>();
+    const emailsLlamadores = new Set<string>();
     for (const u of usuarios) {
       const apodo = u.apodo?.trim() || u.email.split('@')[0];
       apodoMap.set(u.email.toLowerCase(), apodo);
+      emailsLlamadores.add(u.email.toLowerCase());
     }
+
+    const adminEmailLower = adminEmail?.toLowerCase() ?? '';
 
     // Agrupar por procesadoPor
     const mapa = new Map<string, LlamadorStats>();
@@ -1259,6 +1296,8 @@ export class FirestoreService {
       const data = d.data();
       const email: string = data['procesadoPor'] || '';
       if (!email) continue;
+      // Excluir el email del admin: los cambios de estado que hizo no son su mérito
+      if (adminEmailLower && email.toLowerCase() === adminEmailLower) continue;
 
       if (!mapa.has(email)) {
         // Apodo actual del usuario tiene prioridad; ASGINADO de cada caso puede ser stale
@@ -1288,6 +1327,25 @@ export class FirestoreService {
         case 'sincontacto':                     entry.sinContacto++;  break;
         case 'conabogado':                      entry.conAbogado++;   break;
         case 'nointeresado':                    entry.noInteresado++; break;
+      }
+    }
+
+    // Agregar usuarios registrados que no procesaron ningún caso (consumidos = 0), sin incluir al admin
+    for (const u of usuarios) {
+      const emailLower = u.email.toLowerCase();
+      if (adminEmailLower && emailLower === adminEmailLower) continue; // excluir admin
+      if (!mapa.has(u.email) && !mapa.has(emailLower)) {
+        const apodo = u.apodo?.trim() || u.email.split('@')[0];
+        mapa.set(u.email, {
+          email: u.email,
+          nombre: apodo,
+          consumidos: 0,
+          acepto: 0,
+          interesado: 0,
+          sinContacto: 0,
+          conAbogado: 0,
+          noInteresado: 0,
+        });
       }
     }
 

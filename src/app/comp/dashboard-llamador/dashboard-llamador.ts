@@ -467,7 +467,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     if (!cel) return;
     const tel = (cel.codigoArea + cel.numero).replace(/\D/g, '');
     const nombre = encodeURIComponent(`Hola ${caso.Trabajador || ''}`);
-    window.open(`https://web.whatsapp.com/send?phone=54${tel}&text=${nombre}`, 'wa_llamador');
+    window.open(`https://web.whatsapp.com/send?phone=54${tel}&text=${nombre}`, 'wa_llamador')?.focus();
   }
 
   ultimoComentario(caso: CasoModel): string {
@@ -764,13 +764,13 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   abrirWaNumero(codigoArea: string, numero: string, nombre?: string): void {
     const tel = (codigoArea + numero).replace(/\D/g, '');
     const txt = encodeURIComponent(`Hola ${nombre || ''}`);
-    window.open(`https://web.whatsapp.com/send?phone=54${tel}&text=${txt}`, 'wa_llamador');
+    window.open(`https://web.whatsapp.com/send?phone=54${tel}&text=${txt}`, 'wa_llamador')?.focus();
   }
 
   abrirWhatsappVinculo(documento: string, nombre?: string): void {
     const telefono = documento.replace(/\D/g, '');
     const txt = encodeURIComponent(`Hola ${nombre || ''}`);
-    window.open(`https://web.whatsapp.com/send?phone=54${telefono}&text=${txt}`, 'wa_llamador');
+    window.open(`https://web.whatsapp.com/send?phone=54${telefono}&text=${txt}`, 'wa_llamador')?.focus();
   }
 
   async reintentar(): Promise<void> {
@@ -788,8 +788,8 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       await this.firestoreService.marcarProcesado(
         this.caso.id,
         this.estadoActivo,
-        this.auth.getCurrentEmail(),
-        this.apodoUsuario,
+        this.auth.getCurrentEmail().trim(),
+        this.apodoUsuario.trim(),
         this.caso,
         this.comentarioCasoActual
       );

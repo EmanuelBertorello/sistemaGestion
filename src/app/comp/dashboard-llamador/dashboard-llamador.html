@@ -522,6 +522,20 @@
                   }
 
 
+                  @if (sumario.domicilios && sumario.domicilios.length > 0) {
+                    <div>
+                      <h3 class="dl-section-head">Domicilios</h3>
+                      <div class="flex flex-col gap-2">
+                        @for (d of sumario.domicilios.slice(0, 3); track d.calle) {
+                          <div class="dl-email-row">
+                            <p class="text-sm font-medium text-gray-800">{{ d.calle }} {{ d.altura || '' }}{{ d.piso ? ', Piso ' + d.piso : '' }}{{ d.depto ? ' Dpto ' + d.depto : '' }}</p>
+                            <p class="text-xs text-gray-400">{{ d.localidad }}{{ d.provincia ? ' · ' + d.provincia : '' }}{{ d.cp ? ' · CP ' + d.cp : '' }}</p>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+
                   @if (sumario.relaciones && sumario.relaciones.length > 0) {
                     <div>
                       <h3 class="dl-section-head">Relaciones</h3>
