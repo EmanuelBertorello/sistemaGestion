@@ -1,0 +1,622 @@
+<!-- ══ KANBAN ════════════════════════════════════════════════════════════════ -->
+<div class="h-screen flex flex-col overflow-hidden" style="background:#f5f5f5">
+
+  <!-- Topbar -->
+  <header class="bg-white border-b border-gray-200 px-5 h-11 flex items-center gap-3 shrink-0" style="box-shadow:0 1px 3px rgba(0,0,0,.06)">
+    <button (click)="volver()" class="flex items-center gap-1 text-[#875A7B] hover:text-[#6e4765] text-sm font-medium transition">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      Módulos
+    </button>
+    <span class="text-gray-300 text-sm">/</span>
+    <div class="flex items-center gap-2">
+      <div class="w-5 h-5 rounded text-[10px] font-black flex items-center justify-center text-white shrink-0"
+        [class.bg-sky-500]="modulo === 'srt'" [class.bg-violet-500]="modulo === 'sisfe'">{{ titulo[0] }}</div>
+      <span class="text-sm font-semibold text-gray-700">{{ titulo }}</span>
+      <span class="text-gray-400 text-xs">— Expedientes</span>
+    </div>
+    <div class="ml-auto flex items-center gap-3">
+      <button (click)="abrirModalNuevo('iniciados')"
+        class="flex items-center gap-1.5 bg-[#875A7B] hover:bg-[#6e4765] text-white text-sm font-semibold px-3.5 py-1.5 rounded transition"
+        style="box-shadow:0 1px 3px rgba(0,0,0,.15)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Nuevo
+      </button>
+      <div class="w-px h-5 bg-gray-200"></div>
+      <span class="text-xs text-gray-400">{{ expedientes.length }} expediente(s)</span>
+      <button (click)="cerrarSesion()" class="text-xs text-gray-400 hover:text-red-500 transition font-medium">Salir</button>
+    </div>
+  </header>
+
+  @if (cargando) {
+    <div class="flex-1 flex items-center justify-center">
+      <div class="flex flex-col items-center gap-3">
+        <div class="w-7 h-7 rounded-full border-[3px] border-t-transparent animate-spin"
+          [class.border-sky-500]="modulo === 'srt'" [class.border-violet-500]="modulo === 'sisfe'"></div>
+        <p class="text-sm text-gray-400">Cargando expedientes...</p>
+      </div>
+    </div>
+  }
+
+  @if (!cargando) {
+    <div class="flex-1 min-h-0 overflow-x-auto overflow-y-auto p-5">
+      <div class="flex gap-4 items-start min-w-max pb-4">
+
+        @for (etapa of ETAPAS; track etapa.key) {
+          <div class="w-[200px] flex flex-col shrink-0"
+            (dragover)="onDragOver($event, etapa.key)"
+            (dragleave)="onDragLeave($event)"
+            (drop)="onDrop($event, etapa.key)">
+
+            <!-- Column header -->
+            <div class="mb-3 px-1">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[12px] font-bold text-gray-600 uppercase tracking-[0.06em]">{{ etapa.label }}</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[12px] font-semibold text-gray-400">{{ columna(etapa.key).length }}</span>
+                  <button (click)="abrirModalNuevo(etapa.key)"
+                    class="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-[#875A7B] hover:bg-gray-100 transition text-base leading-none">+</button>
+                </div>
+              </div>
+              <div class="h-[3px] w-full rounded-full" [style.background-color]="etapa.bar"></div>
+            </div>
+
+            <!-- Cards drop zone — highlight on dragover -->
+            <div class="flex flex-col gap-2 min-h-[80px] rounded-xl p-1 transition-all"
+              [style.background]="dragOverEtapa === etapa.key ? 'rgba(135,90,123,.06)' : ''"
+              [style.box-shadow]="dragOverEtapa === etapa.key ? 'inset 0 0 0 2px rgba(135,90,123,.3)' : ''">
+
+              @for (exp of columna(etapa.key); track exp.id) {
+                <div
+                  draggable="true"
+                  (dragstart)="onDragStart($event, exp)"
+                  (dragend)="onDragEnd()"
+                  (click)="confirmEliminarId !== exp.id && abrirDetalle(exp)"
+                  class="bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-all group select-none"
+                  [class.pronto-urgente]="esProntoUrgente(exp) && confirmEliminarId !== exp.id"
+                  [style.opacity]="draggingId === exp.id ? '0.4' : '1'"
+                  [style.cursor]="draggingId ? 'grabbing' : 'grab'"
+                  [class.ring-1]="confirmEliminarId === exp.id"
+                  [class.ring-red-400]="confirmEliminarId === exp.id"
+                  style="box-shadow:0 1px 2px rgba(0,0,0,.07)">
+
+                  <!-- Badge urgencia (solo si corresponde) -->
+                  @if (esProntoUrgente(exp)) {
+                    <div class="flex items-center gap-1 bg-red-500 text-white text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-t-lg">
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      Pronto Despacho — día {{ diasTranscurridos(exp) }}
+                    </div>
+                  }
+
+                  <!-- Card body -->
+                  <div class="px-3 pt-2.5 pb-2">
+                    <p class="text-[12px] font-semibold leading-tight" [class.text-gray-800]="!esProntoUrgente(exp)" [class.text-red-700]="esProntoUrgente(exp)">{{ exp.nombre }}</p>
+                    <p class="text-[11px] text-gray-500 font-mono mt-0.5">{{ exp.nroExpediente || 'Sin número' }}</p>
+                    @if (exp.art) { <p class="text-[10px] text-gray-400 mt-0.5 leading-snug">{{ exp.art }}</p> }
+                    @if (exp.fechaIngreso) {
+                      <p class="text-[10px] mt-1 flex items-center gap-1" [class.text-red-400]="esProntoUrgente(exp)" [class.text-gray-400]="!esProntoUrgente(exp)">
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        {{ exp.fechaIngreso }}
+                      </p>
+                    }
+                  </div>
+
+                  <!-- Confirm delete -->
+                  @if (confirmEliminarId === exp.id) {
+                    <div class="border-t border-gray-100 px-3 py-2 flex items-center gap-2" (click)="$event.stopPropagation()">
+                      <p class="text-[10px] text-red-500 font-semibold flex-1">¿Eliminar?</p>
+                      <button (click)="eliminar(exp.id!)" class="text-[11px] bg-red-500 hover:bg-red-600 text-white px-2.5 py-1 rounded font-semibold transition">Sí</button>
+                      <button (click)="confirmEliminarId = null" class="text-[11px] bg-gray-100 hover:bg-gray-200 text-gray-600 px-2.5 py-1 rounded font-semibold transition">No</button>
+                    </div>
+                  } @else {
+                    <!-- Action bar (hover) -->
+                    <div class="border-t border-gray-100 px-2 py-1.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                         (click)="$event.stopPropagation()">
+                      <button (click)="abrirModalEditar(exp)" title="Editar"
+                        class="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                      <button (click)="moverEtapa(exp, -1)" [disabled]="etapaIdx(exp.etapaArca ?? 'iniciados') === 0" title="Etapa anterior"
+                        class="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition disabled:opacity-0 disabled:pointer-events-none">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                      </button>
+                      <button (click)="moverEtapa(exp, 1)" [disabled]="etapaIdx(exp.etapaArca ?? 'iniciados') === ETAPAS.length - 1" title="Siguiente etapa"
+                        class="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition disabled:opacity-0 disabled:pointer-events-none">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                      </button>
+                      <!-- Botón → módulo contrario -->
+                      <button (click)="iniciarPasarModulo(exp.id!)"
+                        [title]="'Pasar a ' + tituloDestino"
+                        class="w-7 h-7 flex items-center justify-center rounded hover:bg-violet-50 text-gray-300 transition"
+                        [class.hover:text-violet-500]="modulo === 'srt'"
+                        [class.hover:text-sky-500]="modulo === 'sisfe'">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                          <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                      </button>
+                      <div class="flex-1"></div>
+                      <button (click)="confirmarEliminar(exp.id!)" title="Eliminar"
+                        class="w-7 h-7 flex items-center justify-center rounded hover:bg-red-50 text-gray-300 hover:text-red-500 transition">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                      </button>
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- Empty placeholder -->
+              @if (columna(etapa.key).length === 0) {
+                <button (click)="abrirModalNuevo(etapa.key)"
+                  class="border-2 border-dashed border-gray-200 rounded-lg py-8 flex flex-col items-center gap-1.5 text-gray-300 hover:border-[#875A7B]/30 hover:text-[#875A7B]/40 transition">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span class="text-[11px] font-semibold">Agregar</span>
+                </button>
+              }
+            </div>
+
+          </div>
+        }
+
+        <!-- ══ Zona especial: pasar al módulo contrario ══════════════════ -->
+        <div class="w-[200px] flex flex-col shrink-0"
+          (dragover)="onDragOverSisfe($event)"
+          (dragleave)="onDragLeaveSisfe($event)"
+          (drop)="onDropSisfe($event)">
+
+          <!-- Header zona -->
+          <div class="mb-3 px-1">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[12px] font-bold uppercase tracking-[0.06em] flex items-center gap-1.5"
+                [class.text-violet-600]="modulo === 'srt'"
+                [class.text-sky-600]="modulo === 'sisfe'">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+                → {{ tituloDestino }}
+              </span>
+            </div>
+            <div class="h-[3px] w-full rounded-full"
+              [style.background]="modulo === 'srt' ? '#8b5cf6' : '#0ea5e9'"></div>
+          </div>
+
+          <!-- Drop zone -->
+          <div class="border-2 border-dashed rounded-xl p-4 flex flex-col items-center gap-3 min-h-[160px] transition-all duration-150"
+            [class.border-violet-300]="modulo === 'srt' && !dragOverSisfe"
+            [class.bg-violet-50]="modulo === 'srt' && dragOverSisfe"
+            [class.border-violet-500]="modulo === 'srt' && dragOverSisfe"
+            [class.border-sky-300]="modulo === 'sisfe' && !dragOverSisfe"
+            [class.bg-sky-50]="modulo === 'sisfe' && dragOverSisfe"
+            [class.border-sky-500]="modulo === 'sisfe' && dragOverSisfe"
+            [style.box-shadow]="dragOverSisfe ? '0 0 0 3px rgba(139,92,246,.2)' : ''">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="1.5"
+              [attr.stroke]="modulo === 'srt' ? '#8b5cf6' : '#0ea5e9'">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M8 12h8M13 9l3 3-3 3"/>
+            </svg>
+            <p class="text-[11px] text-center font-medium"
+              [class.text-violet-400]="modulo === 'srt'"
+              [class.text-sky-400]="modulo === 'sisfe'">
+              Arrastrá aquí para pasar a<br><strong>{{ tituloDestino }}</strong>
+            </p>
+            <p class="text-[10px] text-gray-400 text-center">
+              El expediente sale de {{ titulo }} e inicia en {{ tituloDestino }}
+            </p>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  }
+
+</div>
+
+<!-- ══ MODAL CREAR / EDITAR ══════════════════════════════════════════════════ -->
+@if (mostrarModal) {
+  <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" (click)="mostrarModal = false">
+    <div class="bg-white rounded-xl w-full max-w-sm flex flex-col" style="box-shadow:0 20px 60px rgba(0,0,0,.2)" (click)="$event.stopPropagation()">
+      <div class="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white text-sm shrink-0"
+          [class.bg-sky-500]="modulo === 'srt'" [class.bg-violet-500]="modulo === 'sisfe'">{{ titulo[0] }}</div>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-bold text-gray-800 text-[14px]">{{ editandoId ? 'Editar' : 'Nuevo' }} expediente</h3>
+          <p class="text-[11px] text-gray-400">{{ titulo }} · {{ ETAPAS[etapaIdx(modalEtapa)]?.label }}</p>
+        </div>
+        <button (click)="mostrarModal = false" class="text-gray-300 hover:text-gray-500 transition shrink-0">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="flex flex-col gap-3.5 p-5">
+        <div>
+          <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide block mb-1.5">Etapa</label>
+          <select [(ngModel)]="modalEtapa" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-[#875A7B] bg-white transition">
+            @for (e of ETAPAS; track e.key) { <option [value]="e.key">{{ e.label }}</option> }
+          </select>
+        </div>
+        <div>
+          <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide block mb-1.5">Nombre del trabajador *</label>
+          <input [(ngModel)]="modalNombre" type="text" placeholder="Ej: GARCIA, Juan Carlos"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-[#875A7B] transition" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide block mb-1.5">CUIL</label>
+            <input [(ngModel)]="modalCuil" type="text" placeholder="20123456789"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:border-[#875A7B] transition" />
+          </div>
+          <div>
+            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide block mb-1.5">N° Expediente</label>
+            <input [(ngModel)]="modalNroExpediente" type="text" placeholder="622647/25"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:border-[#875A7B] transition" />
+          </div>
+        </div>
+        <div>
+          <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide block mb-1.5">ART</label>
+          <input [(ngModel)]="modalArt" type="text" placeholder="Ej: PREVENCION, ASOCIART..."
+            class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-[#875A7B] transition" />
+        </div>
+        <div>
+          <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide block mb-1.5">Notas <span class="text-gray-400 font-normal normal-case">(opcional)</span></label>
+          <textarea [(ngModel)]="modalNotas" rows="2" placeholder="Información adicional..."
+            class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:border-[#875A7B] transition"></textarea>
+        </div>
+        @if (modalError) { <p class="text-xs text-red-500 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">{{ modalError }}</p> }
+      </div>
+      <div class="flex gap-2 justify-end px-5 py-4 border-t border-gray-100">
+        <button (click)="mostrarModal = false" [disabled]="modalGuardando"
+          class="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition disabled:opacity-40">Cancelar</button>
+        <button (click)="guardarModal()" [disabled]="modalGuardando"
+          class="px-4 py-2 rounded-lg bg-[#875A7B] hover:bg-[#6e4765] text-white text-sm font-semibold transition disabled:opacity-50 flex items-center gap-2">
+          @if (modalGuardando) { <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span> }
+          {{ editandoId ? 'Guardar cambios' : 'Agregar' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ CONFIRM: pasar al módulo contrario ════════════════════════════════════ -->
+@if (confirmPasarModuloId && expParaPasar) {
+  <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-5">
+
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          [class.bg-violet-100]="modulo === 'srt'"
+          [class.bg-sky-100]="modulo === 'sisfe'">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="2"
+            [attr.stroke]="modulo === 'srt' ? '#7c3aed' : '#0284c7'">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-bold text-gray-800">Pasar a {{ tituloDestino }}</h3>
+          <p class="text-sm text-gray-500 mt-0.5">
+            Este expediente saldrá de <strong>{{ titulo }}</strong> y comenzará en <strong>{{ tituloDestino }}</strong> desde la etapa "Iniciados".
+          </p>
+        </div>
+      </div>
+
+      <!-- Info del expediente -->
+      <div class="bg-gray-50 rounded-xl p-3 border border-gray-200">
+        <p class="text-sm font-semibold text-gray-800">{{ expParaPasar.nombre }}</p>
+        @if (expParaPasar.nroExpediente) {
+          <p class="text-xs font-mono text-gray-500 mt-0.5">{{ expParaPasar.nroExpediente }}</p>
+        }
+        @if (expParaPasar.art) {
+          <p class="text-xs text-gray-400 mt-0.5">{{ expParaPasar.art }}</p>
+        }
+      </div>
+
+      <div class="flex gap-3 justify-end">
+        <button (click)="cancelarPasarModulo()"
+          class="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition">
+          Cancelar
+        </button>
+        <button (click)="confirmarPasarModulo()"
+          class="px-4 py-2 rounded-xl text-white text-sm font-semibold transition flex items-center gap-2"
+          [class.bg-violet-600]="modulo === 'srt'"
+          [class.hover:bg-violet-700]="modulo === 'srt'"
+          [class.bg-sky-600]="modulo === 'sisfe'"
+          [class.hover:bg-sky-700]="modulo === 'sisfe'">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+          Mover a {{ tituloDestino }}
+        </button>
+      </div>
+
+    </div>
+  </div>
+}
+
+<!-- ══ VISTA DETALLE (estilo Odoo) ══════════════════════════════════════════ -->
+@if (mostrarDetalle) {
+  <div class="fixed inset-0 z-[60] bg-white flex flex-col">
+
+    <!-- Action bar (topbar del detalle) -->
+    <div class="border-b border-gray-200 px-6 py-2.5 flex items-center gap-3 shrink-0 bg-white" style="box-shadow:0 1px 4px rgba(0,0,0,.07)">
+
+      <!-- Breadcrumb -->
+      <button (click)="cerrarDetalle()" class="flex items-center gap-1 text-[#875A7B] hover:text-[#6e4765] text-sm font-medium transition shrink-0">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        Expedientes
+      </button>
+      <span class="text-gray-300 shrink-0">/</span>
+      <span class="text-sm text-gray-600 truncate max-w-[160px]">{{ detalleExp.nombre }}</span>
+
+      <!-- Stage pipeline (centro) -->
+      <div class="flex-1 flex items-center justify-center gap-1 overflow-x-auto px-2">
+        @for (e of ETAPAS; track e.key; let i = $index) {
+          @if (i > 0) { <span class="text-gray-300 text-[11px] shrink-0">›</span> }
+          <button (click)="moverEtapaDetalle(e.key)"
+            class="px-3 py-1.5 rounded text-[11px] font-semibold transition whitespace-nowrap shrink-0"
+            [style]="etapaDetalleStyle(e.key)">
+            {{ e.label }}
+          </button>
+        }
+      </div>
+
+      <!-- Botones guardar/descartar -->
+      <div class="flex items-center gap-2 shrink-0">
+        @if (detalleError) { <p class="text-xs text-red-500">{{ detalleError }}</p> }
+        <button (click)="cerrarDetalle()" [disabled]="detalleGuardando"
+          class="px-4 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition disabled:opacity-40">
+          Descartar
+        </button>
+        <button (click)="guardarDetalle()" [disabled]="detalleGuardando"
+          class="px-4 py-1.5 rounded-lg text-white text-sm font-semibold transition disabled:opacity-50 flex items-center gap-2"
+          style="background:#875A7B">
+          @if (detalleGuardando) { <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span> }
+          Guardar
+        </button>
+      </div>
+    </div>
+
+    <!-- Contenido principal -->
+    <div class="flex flex-1 overflow-hidden">
+
+      <!-- ── Izquierda: campos principales (como Odoo form view) ────────────── -->
+      <div class="flex-1 overflow-auto px-10 py-8" style="background:#fafafa">
+
+        <!-- Título editable -->
+        <input [(ngModel)]="detalleExp.nombre" type="text" placeholder="Nombre del trabajador"
+          class="text-[2rem] font-bold text-gray-900 w-full mb-8 bg-transparent border-b-2 border-transparent hover:border-gray-200 focus:border-[#875A7B] focus:outline-none pb-1 transition leading-tight" />
+
+        <!-- Layout de dos columnas: campos + acciones -->
+        <div class="flex gap-10">
+
+          <!-- Columna izquierda: campos + notas -->
+          <div class="flex-1 min-w-0 flex flex-col gap-8">
+
+            <!-- Grid de campos -->
+            <div class="grid grid-cols-2 gap-x-16 gap-y-6">
+
+              <div>
+                <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">N° Expediente</p>
+                <input [(ngModel)]="detalleExp.nroExpediente" type="text"
+                  class="w-full text-sm text-gray-800 font-mono bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-[#875A7B] focus:outline-none py-1 transition" />
+              </div>
+
+              <div>
+                <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">CUIL</p>
+                <input [(ngModel)]="detalleExp.cuil" type="text"
+                  class="w-full text-sm text-gray-800 font-mono bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-[#875A7B] focus:outline-none py-1 transition" />
+              </div>
+
+              <div>
+                <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">ART</p>
+                <input [(ngModel)]="detalleExp.art" type="text"
+                  class="w-full text-sm text-gray-800 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-[#875A7B] focus:outline-none py-1 transition" />
+              </div>
+
+              <div>
+                <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Llamador</p>
+                <p class="text-sm text-gray-700 py-1">{{ detalleExp.llamador || '—' }}</p>
+              </div>
+
+              <div>
+                <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Tipo de Accidente</p>
+                <p class="text-sm text-gray-700 py-1">{{ detalleExp.accidente || '—' }}</p>
+              </div>
+
+              <div>
+                <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Localidad</p>
+                <p class="text-sm text-gray-700 py-1">{{ detalleExp.localidad || '—' }}</p>
+              </div>
+
+              <div>
+                <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Etapa Legal</p>
+                <p class="text-sm text-gray-700 py-1">{{ detalleExp.etapa || '—' }}</p>
+              </div>
+
+            </div>
+
+            <!-- Notas internas -->
+            <div>
+              <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Notas internas</p>
+              <textarea [(ngModel)]="detalleExp.notas" rows="5" placeholder="Agregar notas sobre este expediente..."
+                class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:border-[#875A7B] resize-none bg-white transition"></textarea>
+            </div>
+
+          </div>
+
+          <!-- Columna derecha: Ver Expediente + Analizar IA -->
+          @if (pdfUrl(detalleExp.nroExpediente)) {
+            <div class="w-72 shrink-0 flex flex-col gap-4 pt-1">
+
+              <!-- Ver Expediente — grande -->
+              <a [href]="pdfUrl(detalleExp.nroExpediente)!" target="_blank"
+                class="flex items-center gap-3 w-full px-5 py-4 rounded-2xl border-2 border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-400 transition group"
+                style="box-shadow:0 2px 8px rgba(239,68,68,.1)">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+                <span class="text-base font-bold text-red-600 flex-1">Ver Expediente</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </a>
+
+              <!-- Analizar con IA — grande -->
+              <button (click)="analizarConIA()" [disabled]="iaAnalizando"
+                class="flex items-center justify-center gap-3 w-full px-5 py-4 rounded-2xl border-2 border-violet-300 bg-violet-50 hover:bg-violet-100 hover:border-violet-500 transition font-bold text-base text-violet-700 disabled:opacity-50"
+                style="box-shadow:0 2px 8px rgba(124,58,237,.1)">
+                @if (iaAnalizando) {
+                  <span class="w-5 h-5 border-2 border-violet-400 border-t-transparent rounded-full animate-spin"></span>
+                  Analizando...
+                } @else {
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+                  </svg>
+                  Analizar con IA
+                }
+              </button>
+
+              <!-- Error IA -->
+              @if (iaError) {
+                <div class="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                  <p class="text-xs text-red-600 font-semibold mb-1">Error</p>
+                  <p class="text-[11px] text-red-500 break-words">{{ iaError }}</p>
+                </div>
+              }
+
+              <!-- Resultado IA -->
+              @if (iaTexto) {
+                <div class="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 overflow-auto max-h-[500px]">
+                  <p class="text-[10px] font-bold text-violet-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+                    </svg>
+                    Análisis IA
+                    @if (iaAnalizando) { <span class="w-2.5 h-2.5 border border-violet-400 border-t-transparent rounded-full animate-spin"></span> }
+                  </p>
+                  <p class="text-xs text-violet-900 leading-relaxed whitespace-pre-wrap">{{ iaTexto }}</p>
+                </div>
+              }
+
+            </div>
+          }
+
+        </div>
+
+      </div>
+
+      <!-- ── Derecha: documentación y estado ──────── -->
+      <div class="w-60 shrink-0 border-l border-gray-200 bg-white overflow-auto px-4 py-5 flex flex-col gap-4">
+
+        <!-- Etapa ARCA actual -->
+        <div>
+          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">Etapa ARCA</p>
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold" [class]="detalleEtapa.pill">
+            {{ detalleEtapa.label }}
+          </span>
+        </div>
+
+        <!-- Documentación -->
+        <div>
+          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Documentación</p>
+          <div class="flex flex-col gap-2">
+            @for (check of CHECKS; track check.campo) {
+              <label class="flex items-center gap-2 cursor-pointer group" (click)="toggleCheckDetalle(check.campo)">
+                <div class="w-4 h-4 rounded-[3px] border-2 flex items-center justify-center transition-all shrink-0"
+                  [class.bg-emerald-500]="detalleExp[check.campo]"
+                  [class.border-emerald-500]="detalleExp[check.campo]"
+                  [class.border-gray-300]="!detalleExp[check.campo]">
+                  @if (detalleExp[check.campo]) {
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  }
+                </div>
+                <span class="text-xs transition"
+                  [class.text-gray-700]="detalleExp[check.campo]"
+                  [class.font-medium]="detalleExp[check.campo]"
+                  [class.text-gray-400]="!detalleExp[check.campo]">{{ check.label }}</span>
+              </label>
+            }
+          </div>
+        </div>
+
+        <!-- Poder -->
+        <div class="border-t border-gray-100 pt-3">
+          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Poder</p>
+          <label class="flex items-center gap-2 cursor-pointer group" (click)="toggleCheckDetalle('poder')">
+            <div class="w-4 h-4 rounded-[3px] border-2 flex items-center justify-center transition-all shrink-0"
+              [class.bg-emerald-500]="detalleExp.poder"
+              [class.border-emerald-500]="detalleExp.poder"
+              [class.border-gray-300]="!detalleExp.poder">
+              @if (detalleExp.poder) {
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+              }
+            </div>
+            <span class="text-xs transition"
+              [class.text-gray-700]="detalleExp.poder"
+              [class.font-medium]="detalleExp.poder"
+              [class.text-gray-400]="!detalleExp.poder">Poder firmado</span>
+          </label>
+        </div>
+
+        <!-- Historial de movimientos -->
+        <div class="border-t border-gray-100 pt-3">
+          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-3">Historial</p>
+
+          <div class="flex flex-col gap-0">
+
+            <!-- Entrada: fecha de ingreso -->
+            @if (detalleExp.fechaIngreso) {
+              <div class="flex gap-3 items-start">
+                <div class="flex flex-col items-center shrink-0">
+                  <div class="w-2.5 h-2.5 rounded-full bg-blue-400 mt-1"></div>
+                  <div class="w-px flex-1 bg-gray-200 min-h-[20px]"></div>
+                </div>
+                <div class="pb-4 min-w-0">
+                  <p class="text-[11px] font-semibold text-gray-700">Iniciado</p>
+                  <p class="text-[10px] text-gray-400 font-mono">{{ detalleExp.fechaIngreso }}</p>
+                </div>
+              </div>
+            }
+
+            <!-- Movimientos registrados -->
+            @for (mov of (detalleExp.historialMovimientos ?? []); track $index) {
+              <div class="flex gap-3 items-start">
+                <div class="flex flex-col items-center shrink-0">
+                  <div class="w-2.5 h-2.5 rounded-full mt-1"
+                    [style.background]="(ETAPAS[etapaIdx($any(mov.etapa))] || {bar:'#6b7280'}).bar"></div>
+                  <div class="w-px flex-1 bg-gray-200 min-h-[20px]"></div>
+                </div>
+                <div class="pb-4 min-w-0">
+                  <p class="text-[11px] font-semibold text-gray-700">{{ ETAPAS[etapaIdx($any(mov.etapa))]?.label || mov.etapa }}</p>
+                  <p class="text-[10px] text-gray-400 font-mono">{{ mov.fecha }}</p>
+                  @if (mov.nota) { <p class="text-[10px] text-gray-400 mt-0.5">{{ mov.nota }}</p> }
+                </div>
+              </div>
+            }
+
+            <!-- Estado actual (último punto) -->
+            <div class="flex gap-3 items-start">
+              <div class="flex flex-col items-center shrink-0">
+                <div class="w-3 h-3 rounded-full ring-2 ring-white shadow-sm mt-0.5"
+                  [style.background]="ETAPAS[etapaIdx(detalleExp.etapaArca ?? 'iniciados')].bar"></div>
+              </div>
+              <div class="min-w-0">
+                <p class="text-[11px] font-bold text-gray-800">{{ detalleEtapa.label }}</p>
+                <p class="text-[10px] text-gray-400">Estado actual</p>
+              </div>
+            </div>
+
+          </div>
+
+          @if (!detalleExp.fechaIngreso && !(detalleExp.historialMovimientos?.length)) {
+            <p class="text-[11px] text-gray-400 italic">Sin movimientos registrados</p>
+          }
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+}

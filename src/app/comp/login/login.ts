@@ -41,10 +41,11 @@ export class Login {
     this.errorMsg = '';
     try {
       await this.auth.login(this.email, this.password);
-      const destino = this.email.toLowerCase() === 'bcapeletti@hotmail.com'
-        ? '/dashboard-admin'
-        : '/dashboard-llamador';
-      this.router.navigate([destino]);
+      if (this.email.toLowerCase() === 'bcapeletti@hotmail.com') {
+        this.router.navigate(['/dashboard-admin']);
+      } else {
+        this.router.navigate(['/modulos']);
+      }
     } catch (err: any) {
       this.errorMsg = this.mapError(err.code);
     } finally {

@@ -1,0 +1,953 @@
+<div class="min-h-screen bg-gray-50 flex flex-col">
+
+  <!-- ── Topbar ────────────────────────────────────────────── -->
+  <header class="bg-[#1a2035] text-white px-6 py-0 flex items-center gap-4 h-12 shadow-lg">
+    <!-- Volver + Logo -->
+    <button (click)="volver()" class="flex items-center gap-1 text-white/40 hover:text-white transition text-xs shrink-0">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      Módulos
+    </button>
+    <div class="flex items-center gap-2 pr-5 border-l border-r border-white/10 pl-4 shrink-0">
+      <div class="w-6 h-6 rounded bg-indigo-500 flex items-center justify-center text-xs font-black">A</div>
+      <span class="text-sm font-bold tracking-tight">GESTIÓN</span>
+    </div>
+
+    <!-- Nav items -->
+    <nav class="flex items-center gap-1 flex-1 overflow-x-auto">
+      @for (item of NAV; track item.key) {
+        <button (click)="seccion = item.key"
+          class="px-3 py-1 text-sm font-medium rounded transition whitespace-nowrap"
+          [class.text-white]="seccion === item.key"
+          [class.border-b-2]="seccion === item.key"
+          [class.border-indigo-400]="seccion === item.key"
+          [class.text-gray-300]="seccion !== item.key"
+          [class.hover:text-white]="seccion !== item.key"
+          [class.hover:bg-white/10]="seccion !== item.key">
+          {{ item.label }}
+        </button>
+      }
+    </nav>
+
+    <!-- Usuario + logout -->
+    <div class="flex items-center gap-3 shrink-0 pl-4 border-l border-white/10">
+      <span class="text-sm text-gray-300 font-medium">{{ nombreUsuario }}</span>
+      <button (click)="cerrarSesion()"
+        class="text-xs text-gray-400 hover:text-red-400 transition px-2 py-1 rounded hover:bg-white/10">
+        Salir
+      </button>
+    </div>
+  </header>
+
+  <!-- ── DASHBOARD ─────────────────────────────────────────── -->
+  @if (seccion === 'dashboard') {
+    <div class="flex-1 p-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-6">Dashboard</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+          <p class="text-xs text-gray-500 font-medium mb-1">Expedientes</p>
+          <p class="text-3xl font-bold text-indigo-600">{{ expedientes.length }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+          <p class="text-xs text-gray-500 font-medium mb-1">Judiciales</p>
+          <p class="text-3xl font-bold text-green-600">{{ totalJudiciales }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+          <p class="text-xs text-gray-500 font-medium mb-1">Con Pagaré</p>
+          <p class="text-3xl font-bold text-yellow-500">{{ totalConPagare }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+          <p class="text-xs text-gray-500 font-medium mb-1">Sin Cert. Firmas</p>
+          <p class="text-3xl font-bold text-red-500">{{ totalSinCertFirmas }}</p>
+        </div>
+      </div>
+      <p class="text-sm text-gray-400">Seleccioná una sección del menú para trabajar.</p>
+    </div>
+  }
+
+  <!-- ── EXPEDIENTES ────────────────────────────────────────── -->
+  @if (seccion === 'expedientes') {
+    <!-- Sub-toolbar -->
+    <div class="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-3 flex-wrap">
+      <h2 class="text-sm font-bold text-gray-900 mr-1">Expedientes</h2>
+
+      <!-- SISFE / ARCA toggle -->
+      <div class="flex rounded-lg border border-gray-200 overflow-hidden shrink-0">
+        <button (click)="seleccionarFuente('sisfe')"
+          class="px-3 py-1.5 text-xs font-semibold transition"
+          [class.bg-indigo-600]="fuenteExpedientes === 'sisfe'"
+          [class.text-white]="fuenteExpedientes === 'sisfe'"
+          [class.bg-white]="fuenteExpedientes !== 'sisfe'"
+          [class.text-gray-500]="fuenteExpedientes !== 'sisfe'">
+          SISFE
+        </button>
+        <button (click)="seleccionarFuente('arca')"
+          class="px-3 py-1.5 text-xs font-semibold border-l border-gray-200 transition"
+          [class.bg-indigo-600]="fuenteExpedientes === 'arca'"
+          [class.text-white]="fuenteExpedientes === 'arca'"
+          [class.bg-white]="fuenteExpedientes !== 'arca'"
+          [class.text-gray-500]="fuenteExpedientes !== 'arca'">
+          ARCA
+        </button>
+      </div>
+
+      @if (fuenteExpedientes === 'sisfe') {
+        <input [(ngModel)]="busqueda" placeholder="Buscar por CUIL, nombre, expediente..."
+          class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        <span class="text-xs text-gray-400">{{ expedientesFiltrados.length }} resultado(s)</span>
+      } @else {
+        <input [(ngModel)]="arcaBusqueda" placeholder="Buscar por CUIL, nombre, ART, empleador..."
+          class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        @if (!arcaCargando) {
+          <span class="text-xs text-gray-400">{{ arcaFiltrados.length }} de {{ arcaExpedientes.length }} expedientes ARCA</span>
+        }
+      }
+
+      @if (fuenteExpedientes === 'sisfe') {
+        <div class="ml-auto">
+          <button (click)="mostrarModalNuevo = true"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition shadow-sm flex items-center gap-2">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Nuevo Expediente
+          </button>
+        </div>
+      }
+    </div>
+
+    <!-- ── ARCA view ────────────────────────────────────────── -->
+    @if (fuenteExpedientes === 'arca') {
+      <div class="flex-1 overflow-auto px-6 py-4">
+
+        @if (arcaCargando) {
+          <div class="flex flex-col items-center justify-center py-24 gap-3">
+            <div class="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-sm text-gray-500">Cargando expedientes ARCA...</p>
+          </div>
+        } @else {
+          <div class="flex flex-col gap-2">
+            @for (exp of arcaFiltrados; track exp.docId) {
+              <div class="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all">
+
+                <!-- Header -->
+                <div class="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-gray-100">
+                  <!-- Nro expediente SRT -->
+                  <span class="bg-indigo-50 text-indigo-700 text-xs font-semibold px-2.5 py-0.5 rounded-md font-mono">
+                    {{ exp.nroExpediente || exp.docId }}
+                  </span>
+                  <!-- Tipo trámite badge -->
+                  <span class="text-[11px] font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-700">
+                    {{ exp.tipoTramite }}
+                  </span>
+                  <!-- ART -->
+                  <span class="text-xs text-gray-400 ml-1">{{ exp.artNombre }}</span>
+                  <div class="flex-1"></div>
+                  <!-- Delegación -->
+                  @if (exp.delegacion) {
+                    <span class="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{{ exp.delegacion }}</span>
+                  }
+                </div>
+
+                <!-- Body -->
+                <div class="px-4 py-2.5">
+                  <p class="text-sm font-bold text-gray-800 tracking-wide">{{ exp.apellidoNombre }}</p>
+                  <p class="text-xs text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span class="font-mono">{{ exp.cuil }}</span>
+                    @if (exp.localidad) {
+                      <span class="text-gray-300">·</span>
+                      <span>{{ exp.localidad }}{{ exp.provincia && exp.provincia !== exp.localidad ? ', ' + exp.provincia : '' }}</span>
+                    }
+                    @if (exp.fechaAccidente) {
+                      <span class="text-gray-300">·</span>
+                      <span>Acc. {{ exp.fechaAccidente }}</span>
+                    }
+                    @if (exp.tipoAccidente) {
+                      <span class="text-gray-300">·</span>
+                      <span>{{ exp.tipoAccidente }}</span>
+                    }
+                  </p>
+                </div>
+
+                <!-- Footer: empleador + patrocinante -->
+                <div class="flex items-center gap-3 px-4 pb-3 text-[11px] text-gray-400 flex-wrap">
+                  @if (exp.empleador) {
+                    <span class="flex items-center gap-1">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+                      {{ exp.empleador }}
+                    </span>
+                  }
+                  @if (exp.patroNombre) {
+                    <span class="ml-auto flex items-center gap-1">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      {{ exp.patroNombre }}
+                      @if (exp.patroMatricula) { &nbsp;— {{ exp.patroMatricula }} }
+                    </span>
+                  }
+                </div>
+
+              </div>
+            }
+            @if (arcaFiltrados.length === 0 && arcaBusqueda) {
+              <div class="text-center py-16 text-gray-400 text-sm">Sin resultados para "{{ arcaBusqueda }}"</div>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- ── SISFE cards list ──────────────────────────────────── -->
+    @if (fuenteExpedientes === 'sisfe') {
+    <div class="flex-1 overflow-auto px-6 py-4 flex flex-col gap-2">
+      @for (exp of expedientesFiltrados; track exp.cuil + exp.nroExpediente) {
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all">
+
+          <!-- Card header row -->
+          <div class="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-gray-100">
+            <!-- Star / poder -->
+            <button (click)="toggleCheck(exp, 'poder')"
+              class="transition-colors shrink-0"
+              [class.text-yellow-400]="exp.poder"
+              [class.text-gray-300]="!exp.poder">
+              <svg width="16" height="16" viewBox="0 0 24 24" [attr.fill]="exp.poder ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+            </button>
+
+            <!-- Nro expediente -->
+            @if (exp.nroExpediente) {
+              <span class="bg-gray-100 text-gray-600 text-xs font-semibold px-2.5 py-0.5 rounded-md font-mono">{{ exp.nroExpediente }}</span>
+            } @else {
+              <span class="bg-gray-100 text-gray-400 text-xs px-2.5 py-0.5 rounded-md italic">Sin número</span>
+            }
+
+            <!-- Etapa badge -->
+            <select [(ngModel)]="exp.etapa"
+              class="text-[11px] font-bold px-2 py-0.5 rounded-md border-0 cursor-pointer focus:outline-none"
+              [class.bg-green-500]="exp.etapa === 'Judicial'"
+              [class.text-white]="exp.etapa === 'Judicial' || exp.etapa === 'Prejudicial'"
+              [class.bg-blue-500]="exp.etapa === 'Prejudicial'"
+              [class.bg-yellow-400]="exp.etapa === 'Homologación'"
+              [class.text-gray-800]="exp.etapa === 'Homologación' || exp.etapa === 'Cerrado'"
+              [class.bg-gray-300]="exp.etapa === 'Cerrado'">
+              @for (etapa of ETAPAS; track etapa) {
+                <option [value]="etapa" class="text-gray-800 bg-white">{{ etapa }}</option>
+              }
+            </select>
+
+            <!-- ART -->
+            <span class="text-xs text-gray-400 ml-1"
+              [class.italic]="exp.art === 'No encontrado'"
+              [class.text-gray-300]="exp.art === 'No encontrado'">{{ exp.art }}</span>
+
+            <!-- Spacer -->
+            <div class="flex-1"></div>
+
+            <!-- Llamador chip -->
+            @if (exp.llamador) {
+              <span class="text-xs bg-indigo-50 text-indigo-600 font-semibold px-2 py-0.5 rounded-full">{{ exp.llamador }}</span>
+            }
+          </div>
+
+          <!-- Card body -->
+          <div class="px-4 py-2.5">
+            <!-- Nombre -->
+            <p class="text-sm font-bold text-gray-800 tracking-wide"
+              [class.text-gray-400]="exp.nombre === 'No encontrado'"
+              [class.italic]="exp.nombre === 'No encontrado'">
+              {{ exp.nombre }}
+            </p>
+            <!-- CUIL + localidad + accidente -->
+            <p class="text-xs text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
+              <span class="font-mono">{{ exp.cuil }}</span>
+              @if (exp.localidad) {
+                <span class="text-gray-300">·</span>
+                <span>{{ exp.localidad }}</span>
+              }
+              @if (exp.accidente && exp.accidente !== 'No encontrado') {
+                <span class="text-gray-300">·</span>
+                <span>{{ exp.accidente }}</span>
+              }
+            </p>
+          </div>
+
+          <!-- Card footer: doc status -->
+          <div class="flex items-center gap-1 px-4 pb-3 flex-wrap">
+            <button (click)="toggleCheck(exp, 'certificadoMed')"
+              class="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border transition"
+              [class.bg-green-50]="exp.certificadoMed" [class.border-green-300]="exp.certificadoMed" [class.text-green-700]="exp.certificadoMed"
+              [class.bg-gray-50]="!exp.certificadoMed" [class.border-gray-200]="!exp.certificadoMed" [class.text-gray-400]="!exp.certificadoMed">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                @if (exp.certificadoMed) { <polyline points="20 6 9 17 4 12"/> }
+                @else { <line x1="5" y1="12" x2="19" y2="12"/> }
+              </svg>
+              Cert. Med.
+            </button>
+
+            <button (click)="toggleCheck(exp, 'informeMed')"
+              class="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border transition"
+              [class.bg-green-50]="exp.informeMed" [class.border-green-300]="exp.informeMed" [class.text-green-700]="exp.informeMed"
+              [class.bg-gray-50]="!exp.informeMed" [class.border-gray-200]="!exp.informeMed" [class.text-gray-400]="!exp.informeMed">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                @if (exp.informeMed) { <polyline points="20 6 9 17 4 12"/> }
+                @else { <line x1="5" y1="12" x2="19" y2="12"/> }
+              </svg>
+              Inf. Med.
+            </button>
+
+            <button (click)="toggleCheck(exp, 'certFirmas')"
+              class="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border transition"
+              [class.bg-green-50]="exp.certFirmas" [class.border-green-300]="exp.certFirmas" [class.text-green-700]="exp.certFirmas"
+              [class.bg-gray-50]="!exp.certFirmas" [class.border-gray-200]="!exp.certFirmas" [class.text-gray-400]="!exp.certFirmas">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                @if (exp.certFirmas) { <polyline points="20 6 9 17 4 12"/> }
+                @else { <line x1="5" y1="12" x2="19" y2="12"/> }
+              </svg>
+              Cert. Firmas
+            </button>
+
+            <button (click)="toggleCheck(exp, 'ratificacion')"
+              class="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border transition"
+              [class.bg-green-50]="exp.ratificacion" [class.border-green-300]="exp.ratificacion" [class.text-green-700]="exp.ratificacion"
+              [class.bg-gray-50]="!exp.ratificacion" [class.border-gray-200]="!exp.ratificacion" [class.text-gray-400]="!exp.ratificacion">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                @if (exp.ratificacion) { <polyline points="20 6 9 17 4 12"/> }
+                @else { <line x1="5" y1="12" x2="19" y2="12"/> }
+              </svg>
+              Ratific.
+            </button>
+
+            <button (click)="toggleCheck(exp, 'pagare')"
+              class="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border transition"
+              [class.bg-green-50]="exp.pagare" [class.border-green-300]="exp.pagare" [class.text-green-700]="exp.pagare"
+              [class.bg-gray-50]="!exp.pagare" [class.border-gray-200]="!exp.pagare" [class.text-gray-400]="!exp.pagare">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                @if (exp.pagare) { <polyline points="20 6 9 17 4 12"/> }
+                @else { <line x1="5" y1="12" x2="19" y2="12"/> }
+              </svg>
+              Pagaré
+            </button>
+
+            <button (click)="toggleCheck(exp, 'boleta')"
+              class="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border transition"
+              [class.bg-green-50]="exp.boleta" [class.border-green-300]="exp.boleta" [class.text-green-700]="exp.boleta"
+              [class.bg-gray-50]="!exp.boleta" [class.border-gray-200]="!exp.boleta" [class.text-gray-400]="!exp.boleta">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                @if (exp.boleta) { <polyline points="20 6 9 17 4 12"/> }
+                @else { <line x1="5" y1="12" x2="19" y2="12"/> }
+              </svg>
+              Boleta
+            </button>
+
+            <!-- Poder al final -->
+            <button (click)="toggleCheck(exp, 'poder')"
+              class="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border transition ml-auto"
+              [class.bg-indigo-50]="exp.poder" [class.border-indigo-300]="exp.poder" [class.text-indigo-700]="exp.poder"
+              [class.bg-gray-50]="!exp.poder" [class.border-gray-200]="!exp.poder" [class.text-gray-400]="!exp.poder">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                @if (exp.poder) { <polyline points="20 6 9 17 4 12"/> }
+                @else { <line x1="5" y1="12" x2="19" y2="12"/> }
+              </svg>
+              Poder
+            </button>
+          </div>
+
+        </div>
+      }
+      @if (expedientesFiltrados.length === 0) {
+        <div class="text-center py-16 text-gray-400 text-sm">Sin resultados para "{{ busqueda }}"</div>
+      }
+    </div>
+    }
+
+  }
+
+  <!-- ── CALCULADORAS ───────────────────────────────────────── -->
+  @if (seccion === 'calculadoras') {
+    <div class="flex-1 overflow-auto bg-[#f5f6fa] p-5">
+
+      <!-- Header strip -->
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <rect x="4" y="2" width="16" height="20" rx="2"/>
+            <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/>
+            <line x1="8" y1="14" x2="12" y2="14"/>
+          </svg>
+        </div>
+        <div>
+          <h2 class="text-sm font-bold text-gray-900 leading-none">Calculadora de Riesgos del Trabajo — ART</h2>
+          <p class="text-[11px] text-gray-400 mt-0.5">Leyes 24.557 · 27.348 · DNU 669/19 &nbsp;|&nbsp; 53 × IBM × t × (65 − edad) ÷ 65</p>
+        </div>
+      </div>
+
+      <div class="flex gap-4 items-start">
+
+        <!-- ── Panel izquierdo ───────────────────────────────── -->
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm w-72 shrink-0 overflow-hidden">
+
+          <!-- Ley selector -->
+          <div class="bg-[#1a2035] px-4 py-3">
+            <label class="text-[10px] font-semibold text-indigo-300 uppercase tracking-wider block mb-1.5">Ley aplicable</label>
+            <select [(ngModel)]="calcLey" (ngModelChange)="calcResultado = null"
+              class="w-full bg-white/10 border border-white/20 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400">
+              <option value="ley27348" class="text-gray-900 bg-white">Ley 27.348 — RIPTE + Tasa</option>
+              <option value="ley24577" class="text-gray-900 bg-white">Ley 24.557 — Fórmula clásica</option>
+              <option value="dnu669"   class="text-gray-900 bg-white">DNU 669/19 — RIPTE + Interés</option>
+            </select>
+          </div>
+
+          <div class="px-4 py-4 flex flex-col gap-3">
+
+            <!-- Carátula -->
+            <div>
+              <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Carátula</label>
+              <input [(ngModel)]="calcCaratula" placeholder="GARCIA JUAN c/ EMPRESA S.A."
+                class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300 placeholder:text-gray-300" />
+            </div>
+
+            <!-- Fechas + Edad -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Fecha Accidente</label>
+                <input type="date" [(ngModel)]="calcFechaAccidente"
+                  class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+              </div>
+              <div>
+                <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Edad</label>
+                <input type="number" [(ngModel)]="calcEdad" placeholder="42" min="18" max="64"
+                  class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+              </div>
+            </div>
+
+            <div>
+              <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Fecha Hasta</label>
+              <input type="date" [(ngModel)]="calcFechaHasta"
+                class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+
+            <!-- RIPTE -->
+            @if (calcLey === 'ley27348' || calcLey === 'dnu669') {
+              <div>
+                <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">RIPTE Vigente</label>
+                <select [(ngModel)]="calcRipte"
+                  class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                  @for (r of RIPTE_VALORES; track r.valor) {
+                    <option [ngValue]="r.valor">{{ r.label }}</option>
+                  }
+                </select>
+              </div>
+            }
+
+            <!-- DNU: fechas RIPTE + tasa -->
+            @if (calcLey === 'dnu669') {
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">RIPTE Desde</label>
+                  <input type="date" [(ngModel)]="calcDnuDesde"
+                    class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+                <div>
+                  <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">RIPTE Hasta</label>
+                  <input type="date" [(ngModel)]="calcDnuHasta"
+                    class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+              </div>
+              <div>
+                <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Tasa Interés Anual (%)</label>
+                <input type="number" [(ngModel)]="calcTasaInteres" placeholder="36" step="0.01"
+                  class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+              </div>
+            }
+
+            <!-- IBM tipo + incapacidad -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Período IBM</label>
+                <select [(ngModel)]="calcIbmTipo"
+                  class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                  <option value="mensual">Mensual</option>
+                  <option value="quincenal">Quincenal</option>
+                  <option value="semanal">Semanal</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Incapacidad %</label>
+                <input type="number" [(ngModel)]="calcIncapacidad" placeholder="35" min="1" max="100"
+                  class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+              </div>
+            </div>
+
+            <!-- Separador -->
+            <div class="border-t border-gray-100 pt-2">
+              <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-2">Opciones</label>
+              <div class="flex flex-col gap-2">
+                <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+                  <input type="checkbox" [(ngModel)]="calcMuerte" class="w-3.5 h-3.5 accent-indigo-600" />
+                  Muerte <span class="text-gray-400">(t = 0,65)</span>
+                </label>
+                <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+                  <input type="checkbox" [(ngModel)]="calcAdicional20" class="w-3.5 h-3.5 accent-indigo-600" />
+                  Adicional 20% Art. 3 Ley 26.773
+                </label>
+                <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+                  <input type="checkbox" [(ngModel)]="calcCapu" class="w-3.5 h-3.5 accent-indigo-600" />
+                  CAPU Art. 11 <span class="text-gray-400">(piso 55×RIPTE)</span>
+                </label>
+                @if (calcCapu) {
+                  <label class="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none pl-5">
+                    <input type="checkbox" [(ngModel)]="calcIncluirAdicional20Capu" class="w-3.5 h-3.5 accent-indigo-600" />
+                    + 20% adicional sobre CAPU
+                  </label>
+                }
+              </div>
+            </div>
+
+            <!-- Botones -->
+            <div class="flex gap-2 pt-1">
+              <button (click)="calcular()"
+                class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg transition shadow-sm">
+                Calcular
+              </button>
+              <button (click)="limpiarCalc()"
+                class="px-3 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition">
+                Limpiar
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── Panel derecho ──────────────────────────────────── -->
+        <div class="flex-1 flex flex-col gap-4 min-w-0">
+
+          <!-- Remuneraciones -->
+          <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Últimas remuneraciones</span>
+                <span class="text-[10px] text-gray-400 ml-1">(máx. 12)</span>
+              </div>
+              @if (calcIbm > 0) {
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] text-gray-400">IBM mensual:</span>
+                  <span class="text-sm font-black text-indigo-600">{{ formatPeso(calcIbm) }}</span>
+                </div>
+              }
+            </div>
+            <div class="grid grid-cols-6 gap-2">
+              @for (rem of calcRems; track $index; let i = $index) {
+                <div>
+                  <label class="text-[10px] text-gray-400 block mb-0.5 text-center">{{ i + 1 }}</label>
+                  <input type="number" [(ngModel)]="calcRems[i]" placeholder="—" step="100" min="0"
+                    class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                    [class.border-indigo-200]="calcRems[i]"
+                    [class.bg-indigo-50]="calcRems[i]" />
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Resultado -->
+          @if (calcResultado) {
+            <div class="bg-white rounded-xl border border-indigo-200 shadow-sm overflow-hidden">
+
+              <!-- Header resultado -->
+              <div class="bg-gradient-to-r from-indigo-600 to-indigo-500 px-5 py-4 flex items-end justify-between">
+                <div>
+                  @if (calcCaratula) {
+                    <p class="text-xs text-indigo-200 mb-0.5">{{ calcCaratula }}</p>
+                  }
+                  <p class="text-xs text-indigo-200">
+                    @if (calcLey === 'ley24577') { Ley 24.557 — Fórmula clásica }
+                    @if (calcLey === 'ley27348') { Ley 27.348 — RIPTE + Tasa }
+                    @if (calcLey === 'dnu669')   { DNU 669/19 — RIPTE + Interés }
+                    &nbsp;·&nbsp; Incapacidad {{ calcMuerte ? 'Muerte' : (calcIncapacidad ?? 0) + '%' }}
+                    &nbsp;·&nbsp; Edad {{ calcEdad }} años
+                  </p>
+                </div>
+                <div class="text-right">
+                  <p class="text-[10px] text-indigo-200 mb-0.5">TOTAL INDEMNIZACIÓN</p>
+                  <p class="text-3xl font-black text-white">{{ formatPeso(calcResultado.total) }}</p>
+                </div>
+              </div>
+
+              <!-- Detalle fila -->
+              <div class="px-5 py-4">
+
+                <!-- Fórmula chip -->
+                <div class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 mb-4 font-mono text-xs text-gray-600">
+                  @if (calcLey === 'ley24577') { <span>53 × <b>{{ formatPeso(calcResultado.ibmEfectivo) }}</b> × <b>{{ (calcResultado.t * 100).toFixed(0) }}%</b> × (65 − <b>{{ calcEdad }}</b>) ÷ 65</span> }
+                  @if (calcLey === 'ley27348') { <span>53 × max(IBM, RIPTE) × <b>{{ (calcResultado.t * 100).toFixed(0) }}%</b> × (65 − <b>{{ calcEdad }}</b>) ÷ 65</span> }
+                  @if (calcLey === 'dnu669')   { <span>53 × max(IBM, RIPTE) × <b>{{ (calcResultado.t * 100).toFixed(0) }}%</b> × (65 − <b>{{ calcEdad }}</b>) ÷ 65 + intereses</span> }
+                </div>
+
+                <!-- Tabla detalle -->
+                <div class="flex flex-col divide-y divide-gray-100 text-sm">
+                  <div class="flex justify-between items-center py-2">
+                    <span class="text-gray-500 text-xs">IBM calculado</span>
+                    <span class="font-semibold text-gray-800">{{ formatPeso(calcResultado.ibm) }}</span>
+                  </div>
+                  @if (calcResultado.ibmEfectivo !== calcResultado.ibm) {
+                    <div class="flex justify-between items-center py-2">
+                      <span class="text-gray-500 text-xs">IBM efectivo <span class="text-orange-500">(ajustado a RIPTE)</span></span>
+                      <span class="font-bold text-orange-500">{{ formatPeso(calcResultado.ibmEfectivo) }}</span>
+                    </div>
+                  }
+                  <div class="flex justify-between items-center py-2">
+                    <span class="text-gray-500 text-xs">Prestación base <span class="text-gray-400">53 × IBM × t × coef</span></span>
+                    <span class="font-semibold text-gray-800">{{ formatPeso(calcResultado.base) }}</span>
+                  </div>
+                  @if (calcResultado.adicional20 > 0) {
+                    <div class="flex justify-between items-center py-2">
+                      <span class="text-gray-500 text-xs">+ 20% Art. 3 Ley 26.773</span>
+                      <span class="font-semibold text-green-600">{{ formatPeso(calcResultado.adicional20) }}</span>
+                    </div>
+                  }
+                  @if (calcResultado.capu > 0) {
+                    <div class="flex justify-between items-center py-2">
+                      <span class="text-gray-500 text-xs">+ CAPU Art. 11 <span class="text-gray-400">(diferencia piso 55×RIPTE)</span></span>
+                      <span class="font-semibold text-blue-600">{{ formatPeso(calcResultado.capu) }}</span>
+                    </div>
+                  }
+                  @if (calcLey === 'dnu669' && calcResultado.conIntereses !== calcResultado.total) {
+                    <div class="flex justify-between items-center py-2">
+                      <span class="text-gray-700 text-xs font-semibold">Total con intereses <span class="text-gray-400 font-normal">(tasa {{ calcTasaInteres }}% anual)</span></span>
+                      <span class="text-xl font-black text-green-600">{{ formatPeso(calcResultado.conIntereses) }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          } @else {
+            <div class="bg-white rounded-xl border border-gray-200 border-dashed flex flex-col items-center justify-center h-36 gap-2">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5">
+                <rect x="4" y="2" width="16" height="20" rx="2"/>
+                <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/>
+              </svg>
+              <p class="text-xs text-gray-400">Completá los datos y presioná <span class="text-indigo-500 font-semibold">Calcular</span></p>
+            </div>
+          }
+
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ── AGENDA ───────────────────────────────────────────────── -->
+  @if (seccion === 'agenda') {
+    <div class="flex-1 overflow-hidden flex flex-col bg-[#f5f6fa]">
+
+      <!-- Sub-toolbar -->
+      <div class="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-3 shrink-0">
+        <!-- Navegación mes -->
+        <button (click)="irMesPrev()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition text-gray-600">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <h2 class="text-sm font-bold text-gray-900 w-44 text-center">{{ calNombreMes }}</h2>
+        <button (click)="irMesSig()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition text-gray-600">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button (click)="irHoy()" class="text-xs font-semibold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition border border-indigo-200">
+          Hoy
+        </button>
+        <div class="flex-1"></div>
+        <button (click)="abrirModalEvento()"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nuevo evento
+        </button>
+      </div>
+
+      <div class="flex flex-1 overflow-hidden gap-0">
+
+        <!-- ── Grid calendario ─────────────────────────────────── -->
+        <div class="flex-1 overflow-auto p-4">
+          <!-- Cabecera días semana -->
+          <div class="grid grid-cols-7 mb-1">
+            @for (dia of CAL_DIAS; track dia) {
+              <div class="text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider py-1">{{ dia }}</div>
+            }
+          </div>
+
+          <!-- Celdas -->
+          <div class="grid grid-cols-7 gap-1">
+            @for (celda of calCeldas; track celda.fecha) {
+              <div (click)="calDiaSeleccionado = celda.fecha"
+                class="min-h-[82px] rounded-lg p-1.5 cursor-pointer border transition-all"
+                [class.bg-white]="celda.esActual && calDiaSeleccionado !== celda.fecha"
+                [class.border-gray-200]="celda.esActual && calDiaSeleccionado !== celda.fecha && !celda.esHoy"
+                [class.bg-gray-50]="!celda.esActual"
+                [class.border-transparent]="!celda.esActual || celda.esHoy"
+                [class.border-indigo-400]="calDiaSeleccionado === celda.fecha"
+                [class.bg-indigo-50]="calDiaSeleccionado === celda.fecha"
+                [class.ring-1]="calDiaSeleccionado === celda.fecha"
+                [class.ring-indigo-300]="calDiaSeleccionado === celda.fecha"
+                [class.border-blue-300]="celda.esHoy && calDiaSeleccionado !== celda.fecha"
+                [class.bg-blue-50]="celda.esHoy && calDiaSeleccionado !== celda.fecha"
+                [class.hover:border-indigo-300]="celda.esActual">
+
+                <!-- Número del día -->
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs font-bold leading-none"
+                    [class.text-gray-800]="celda.esActual && !celda.esHoy"
+                    [class.text-gray-300]="!celda.esActual"
+                    [class.text-white]="celda.esHoy"
+                    [class.bg-indigo-600]="celda.esHoy"
+                    [class.rounded-full]="celda.esHoy"
+                    [class.w-5]="celda.esHoy"
+                    [class.h-5]="celda.esHoy"
+                    [class.flex]="celda.esHoy"
+                    [class.items-center]="celda.esHoy"
+                    [class.justify-center]="celda.esHoy">
+                    {{ celda.dia }}
+                  </span>
+                  @if (celda.eventos.length > 0) {
+                    <span class="text-[9px] text-gray-400">{{ celda.eventos.length }}</span>
+                  }
+                </div>
+
+                <!-- Eventos del día -->
+                @for (ev of celda.eventos.slice(0, 3); track ev.id) {
+                  <div class="flex items-center gap-1 mb-0.5 rounded px-1 py-0.5"
+                    [class.bg-rose-100]="ev.tipo === 'audiencia'"
+                    [class.bg-amber-100]="ev.tipo === 'vencimiento'"
+                    [class.bg-blue-100]="ev.tipo === 'cita'"
+                    [class.bg-gray-100]="ev.tipo === 'otro'">
+                    <div class="w-1 h-1 rounded-full shrink-0"
+                      [class.bg-rose-500]="ev.tipo === 'audiencia'"
+                      [class.bg-amber-500]="ev.tipo === 'vencimiento'"
+                      [class.bg-blue-500]="ev.tipo === 'cita'"
+                      [class.bg-gray-400]="ev.tipo === 'otro'"></div>
+                    <span class="text-[10px] leading-tight truncate"
+                      [class.text-rose-700]="ev.tipo === 'audiencia'"
+                      [class.text-amber-700]="ev.tipo === 'vencimiento'"
+                      [class.text-blue-700]="ev.tipo === 'cita'"
+                      [class.text-gray-600]="ev.tipo === 'otro'">{{ ev.titulo }}</span>
+                  </div>
+                }
+                @if (celda.eventos.length > 3) {
+                  <p class="text-[9px] text-gray-400 pl-1">+{{ celda.eventos.length - 3 }} más</p>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- ── Panel lateral derecho ────────────────────────────── -->
+        <div class="w-72 shrink-0 bg-white border-l border-gray-100 flex flex-col overflow-hidden">
+
+          @if (calDiaSeleccionado) {
+            <!-- Header día seleccionado -->
+            <div class="px-4 pt-4 pb-3 border-b border-gray-100">
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-bold text-gray-900">
+                  {{ calDiaSeleccionado | date:'EEEE d' : '' : 'es' }}
+                </p>
+                <button (click)="abrirModalEvento(calDiaSeleccionado)"
+                  class="text-xs text-indigo-600 font-semibold hover:bg-indigo-50 px-2 py-1 rounded-lg transition">
+                  + Agregar
+                </button>
+              </div>
+              <p class="text-xs text-gray-400">{{ calDiaSeleccionado | date:'MMMM y' : '' : 'es' }}</p>
+            </div>
+
+            <!-- Eventos del día -->
+            <div class="flex-1 overflow-auto px-3 py-3 flex flex-col gap-2">
+              @if (calEventosDia.length === 0) {
+                <div class="flex flex-col items-center justify-center h-24 text-center">
+                  <p class="text-xs text-gray-400">Sin eventos este día</p>
+                  <button (click)="abrirModalEvento(calDiaSeleccionado)"
+                    class="text-xs text-indigo-500 mt-1 hover:underline">Agregar evento</button>
+                </div>
+              }
+              @for (ev of calEventosDia; track ev.id) {
+                <div class="rounded-xl border p-3 hover:shadow-sm transition group"
+                  [class.border-rose-200]="ev.tipo === 'audiencia'"
+                  [class.border-amber-200]="ev.tipo === 'vencimiento'"
+                  [class.border-blue-200]="ev.tipo === 'cita'"
+                  [class.border-gray-200]="ev.tipo === 'otro'">
+                  <div class="flex items-start justify-between gap-1">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-1.5 mb-1">
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full" [class]="tipoTextColor(ev.tipo)">
+                          {{ tipoLabel(ev.tipo) }}
+                        </span>
+                        @if (ev.hora) {
+                          <span class="text-[10px] text-gray-400 font-mono">{{ ev.hora }}</span>
+                        }
+                      </div>
+                      <p class="text-xs font-semibold text-gray-800 leading-tight">{{ ev.titulo }}</p>
+                      @if (ev.expedienteNro) {
+                        <p class="text-[10px] text-gray-400 mt-0.5">Exp. {{ ev.expedienteNro }}</p>
+                      }
+                    </div>
+                    <button (click)="eliminarEvento(ev.id)"
+                      class="opacity-0 group-hover:opacity-100 transition text-gray-300 hover:text-red-400 shrink-0 mt-0.5">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          } @else {
+            <!-- Sin día seleccionado: próximos eventos -->
+            <div class="px-4 pt-4 pb-3 border-b border-gray-100">
+              <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Próximos eventos</p>
+            </div>
+            <div class="flex-1 overflow-auto px-3 py-3 flex flex-col gap-2">
+              @for (ev of calProxEventos; track ev.id) {
+                <div (click)="calDiaSeleccionado = ev.fecha"
+                  class="rounded-xl border border-gray-200 p-3 hover:border-indigo-200 hover:bg-indigo-50/30 cursor-pointer transition">
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <div class="w-1.5 h-1.5 rounded-full" [class]="tipoColor(ev.tipo)"></div>
+                    <span class="text-[10px] font-bold text-gray-500">{{ ev.fecha | date:'d MMM' : '' : 'es' }}</span>
+                    @if (ev.hora) { <span class="text-[10px] text-gray-400 font-mono">{{ ev.hora }}</span> }
+                  </div>
+                  <p class="text-xs font-semibold text-gray-800 truncate">{{ ev.titulo }}</p>
+                  @if (ev.expedienteNro) {
+                    <p class="text-[10px] text-gray-400 mt-0.5">Exp. {{ ev.expedienteNro }}</p>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+      </div>
+    </div>
+  }
+
+  <!-- ── Modal nuevo evento ────────────────────────────────────── -->
+  @if (mostrarModalEvento) {
+    <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" (click)="mostrarModalEvento = false">
+      <div class="bg-white rounded-2xl shadow-xl p-6 w-96" (click)="$event.stopPropagation()">
+        <h3 class="text-base font-bold text-gray-900 mb-4">Nuevo evento</h3>
+        <div class="flex flex-col gap-3">
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">Título *</label>
+            <input [(ngModel)]="nuevoEvento.titulo" placeholder="Ej: Audiencia GARCIA JUAN"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-xs text-gray-500 font-medium block mb-1">Fecha *</label>
+              <input type="date" [(ngModel)]="nuevoEvento.fecha"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+            <div>
+              <label class="text-xs text-gray-500 font-medium block mb-1">Hora</label>
+              <input type="time" [(ngModel)]="nuevoEvento.hora"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-xs text-gray-500 font-medium block mb-1">Tipo</label>
+              <select [(ngModel)]="nuevoEvento.tipo"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                <option value="audiencia">Audiencia</option>
+                <option value="vencimiento">Vencimiento</option>
+                <option value="cita">Cita</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500 font-medium block mb-1">N° Expediente</label>
+              <input [(ngModel)]="nuevoEvento.expedienteNro" placeholder="Ej: 622647/25"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">Descripción</label>
+            <textarea [(ngModel)]="nuevoEvento.descripcion" rows="2" placeholder="Notas adicionales..."
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"></textarea>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-5 justify-end">
+          <button (click)="mostrarModalEvento = false"
+            class="px-4 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition">Cancelar</button>
+          <button (click)="agregarEvento()"
+            class="px-4 py-2 rounded-xl text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition">
+            Agregar
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ── ESCRITOS ───────────────────────────────────────────── -->
+  @if (seccion === 'escritos') {
+    <div class="flex-1 flex items-center justify-center p-8">
+      <div class="text-center max-w-sm">
+        <div class="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center mx-auto mb-4">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.5">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+        </div>
+        <h2 class="text-xl font-bold text-gray-900 mb-2">Escritos</h2>
+        <p class="text-sm text-gray-500">Generación automática de escritos judiciales.<br>En desarrollo.</p>
+      </div>
+    </div>
+  }
+
+  <!-- ── FACTURACIÓN ────────────────────────────────────────── -->
+  @if (seccion === 'facturacion') {
+    <div class="flex-1 flex items-center justify-center p-8">
+      <div class="text-center max-w-sm">
+        <div class="w-14 h-14 rounded-2xl bg-green-100 flex items-center justify-center mx-auto mb-4">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="1.5">
+            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+            <line x1="1" y1="10" x2="23" y2="10"/>
+          </svg>
+        </div>
+        <h2 class="text-xl font-bold text-gray-900 mb-2">Facturación</h2>
+        <p class="text-sm text-gray-500">Control de honorarios y facturación por expediente.<br>En desarrollo.</p>
+      </div>
+    </div>
+  }
+
+  <!-- ── CONFIGURACIÓN ─────────────────────────────────────── -->
+  @if (seccion === 'configuracion') {
+    <div class="flex-1 flex items-center justify-center p-8">
+      <div class="text-center max-w-sm">
+        <div class="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="1.5">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </div>
+        <h2 class="text-xl font-bold text-gray-900 mb-2">Configuración</h2>
+        <p class="text-sm text-gray-500">En desarrollo.</p>
+      </div>
+    </div>
+  }
+
+  <!-- ── Modal nuevo expediente ────────────────────────────── -->
+  @if (mostrarModalNuevo) {
+    <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" (click)="mostrarModalNuevo = false">
+      <div class="bg-white rounded-2xl shadow-xl p-6 w-96" (click)="$event.stopPropagation()">
+        <h3 class="text-base font-bold text-gray-900 mb-4">Nuevo Expediente</h3>
+        <div class="flex flex-col gap-3">
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">CUIL</label>
+            <input [(ngModel)]="nuevoExpCuil" placeholder="20123456789"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">N° Expediente</label>
+            <input [(ngModel)]="nuevoExpNro" placeholder="622647/25"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+        </div>
+        <div class="flex gap-2 mt-5 justify-end">
+          <button (click)="mostrarModalNuevo = false"
+            class="px-4 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition">Cancelar</button>
+          <button class="px-4 py-2 rounded-xl text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition">
+            Agregar
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>

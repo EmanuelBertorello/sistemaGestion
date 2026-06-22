@@ -106,6 +106,15 @@ export interface CasoModel {
   cartaImpresa?: boolean;
   ocultadoPor?: string[];   // emails de llamadores que ocultaron este caso de su historial
   nroExpediente?: string;
+  fechaAcepto?: string;
+  telefonoContacto?: string;
+  documentacion?: {
+    anexoUrl: string;
+    dniUrls: string[];
+    altaMedicaUrl?: string;
+    cargadoPor: string;
+    cargadoEn: string;
+  };
   certeroData?: Record<string, any>;
   recontactos?: Array<{ timestamp: string; comentario: string; por: string; apodo: string }>; // legacy
   seguimientos?: Array<{

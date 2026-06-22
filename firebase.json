@@ -2,8 +2,11 @@
   "functions": {
     "source": "functions"
   },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "hosting": {
-    "site": "caoe2026",
+    "site": "bdcap-a3b7b",
     "public": "dist/my-app/browser",
     "ignore": [
       "firebase.json",

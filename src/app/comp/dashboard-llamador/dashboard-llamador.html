@@ -38,6 +38,10 @@
         </div>
       </div>
 
+      <button (click)="abrirModalExterno()" class="btn btn-ghost-white btn-sm shrink-0 hidden sm:flex items-center gap-1.5">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Iniciar Caso Fuera del Sistema
+      </button>
       <button (click)="cerrarSesion()" class="btn btn-ghost-white btn-sm shrink-0">Salir</button>
     </div>
   </div>
@@ -171,42 +175,216 @@
     </div>
   }
 
-  <!-- Modal número de expediente (Acepto) -->
-  @if (mostrarModalExpediente) {
+  <!-- Modal documentación (Acepto) -->
+  @if (mostrarModalDocs) {
     <div class="modal-overlay">
-      <div class="modal-panel">
+      <div class="modal-panel" style="max-width:480px">
+
+        <!-- Header -->
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xl font-bold shrink-0">✓</div>
           <div>
             <h2 class="font-display text-[#0C1A35] text-lg font-bold">Caso Aceptado</h2>
-            <p class="text-sm text-gray-500">Ingresá el número de expediente para continuar.</p>
+            @if (requiereDocs && requiereExpediente) {
+              <p class="text-xs text-gray-500">Subí los PDFs e ingresá el número de expediente para continuar. Máximo {{ DOC_MAX_MB }} MB por archivo.</p>
+            } @else if (requiereDocs) {
+              <p class="text-xs text-gray-500">Subí los PDFs para continuar. Máximo {{ DOC_MAX_MB }} MB por archivo.</p>
+            } @else if (requiereExpediente) {
+              <p class="text-xs text-gray-500">Ingresá el número de expediente para continuar.</p>
+            }
           </div>
         </div>
 
-        <div class="flex flex-col gap-1">
-          <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider">Número de Expediente *</label>
-          <input
-            [(ngModel)]="expedienteInput"
-            (keyup.enter)="confirmarExpediente()"
-            type="text"
-            placeholder="Ej: EXP-2024-001234"
-            class="border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 font-mono"
-          />
-          @if (expedienteError) {
-            <p class="text-xs text-red-500 mt-1">{{ expedienteError }}</p>
+        <!-- Campos -->
+        <div class="flex flex-col gap-2.5">
+
+          @if (requiereExpediente) {
+            <!-- NÚMERO DE EXPEDIENTE -->
+            <div>
+              <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                Número de expediente <span class="text-red-400">*</span>
+              </p>
+              <input
+                type="text"
+                [(ngModel)]="expedienteInput"
+                placeholder="Ej: 12345/2026"
+                class="w-full border rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                [class.border-blue-400]="expedienteInput"
+                [class.border-gray-200]="!expedienteInput"
+              />
+            </div>
           }
+
+          @if (requiereDocs) {
+          <!-- Reutilizable: file picker row -->
+          <!-- ANEXO -->
+          <div>
+            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+              Anexo <span class="text-red-400">*</span>
+            </p>
+            <label class="flex items-center gap-2 border rounded-xl px-3 py-2.5 cursor-pointer transition"
+              [class.border-green-400]="docAnexo" [class.bg-green-50]="docAnexo"
+              [class.border-gray-200]="!docAnexo" [class.hover:border-green-300]="!docAnexo">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0" [class.text-green-500]="docAnexo" [class.text-gray-400]="!docAnexo">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <span class="flex-1 text-sm truncate" [class.text-green-700]="docAnexo" [class.font-medium]="docAnexo" [class.text-gray-400]="!docAnexo">
+                {{ docAnexo ? docAnexo.name : 'Seleccionar PDF' }}
+              </span>
+              @if (docAnexo) {
+                <span class="text-[10px] text-gray-400 shrink-0">{{ (docAnexo.size / 1048576).toFixed(1) }} MB</span>
+              }
+              <input type="file" accept=".pdf,application/pdf" class="hidden" (change)="setDocFile($event,'anexo')">
+            </label>
+          </div>
+
+          <!-- DNI -->
+          <div>
+            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+              DNI <span class="text-red-400">*</span>
+            </p>
+            <label class="flex items-center gap-2 border rounded-xl px-3 py-2.5 cursor-pointer transition"
+              [class.border-green-400]="docDni" [class.bg-green-50]="docDni"
+              [class.border-gray-200]="!docDni" [class.hover:border-green-300]="!docDni">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0" [class.text-green-500]="docDni" [class.text-gray-400]="!docDni">
+                <rect x="3" y="5" width="18" height="14" rx="2"/>
+                <circle cx="9" cy="11" r="2"/><path d="M15 9h2M15 13h2"/>
+              </svg>
+              <span class="flex-1 text-sm truncate" [class.text-green-700]="docDni" [class.font-medium]="docDni" [class.text-gray-400]="!docDni">
+                {{ docDni ? docDni.name : 'Seleccionar PDF' }}
+              </span>
+              @if (docDni) {
+                <span class="text-[10px] text-gray-400 shrink-0">{{ (docDni.size / 1048576).toFixed(1) }} MB</span>
+              }
+              <input type="file" accept=".pdf,application/pdf" class="hidden" (change)="setDocFile($event,'dni')">
+            </label>
+          </div>
+
+          <!-- ALTA MÉDICA (opcional) -->
+          <div>
+            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+              Alta Médica <span class="text-gray-400 font-normal text-[10px] normal-case">(opcional)</span>
+            </p>
+            <label class="flex items-center gap-2 border rounded-xl px-3 py-2.5 cursor-pointer transition"
+              [class.border-blue-400]="docAltaMedica" [class.bg-blue-50]="docAltaMedica"
+              [class.border-gray-200]="!docAltaMedica" [class.hover:border-blue-300]="!docAltaMedica">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0" [class.text-blue-500]="docAltaMedica" [class.text-gray-400]="!docAltaMedica">
+                <path d="M9 12h6M12 9v6"/><circle cx="12" cy="12" r="9"/>
+              </svg>
+              <span class="flex-1 text-sm truncate" [class.text-blue-700]="docAltaMedica" [class.font-medium]="docAltaMedica" [class.text-gray-400]="!docAltaMedica">
+                {{ docAltaMedica ? docAltaMedica.name : 'Seleccionar PDF' }}
+              </span>
+              @if (docAltaMedica) {
+                <span class="text-[10px] text-gray-400 shrink-0">{{ (docAltaMedica.size / 1048576).toFixed(1) }} MB</span>
+              }
+              <input type="file" accept=".pdf,application/pdf" class="hidden" (change)="setDocFile($event,'altaMedica')">
+            </label>
+          </div>
+
+          <!-- FOTOS DE SECUELA (múltiples, opcional) -->
+          <div>
+            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+              Fotos de secuela
+              <span class="text-gray-400 font-normal text-[10px] normal-case">(opcional — JPG, PNG o PDF)</span>
+            </p>
+
+            <!-- Lista de archivos ya seleccionados -->
+            @if (docSecuela.length > 0) {
+              <div class="flex flex-col gap-1 mb-1.5">
+                @for (f of docSecuela; track f.name; let i = $index) {
+                  <div class="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" class="shrink-0">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                      <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <span class="flex-1 text-xs text-orange-700 font-medium truncate">{{ f.name }}</span>
+                    <span class="text-[10px] text-gray-400 shrink-0">{{ (f.size / 1048576).toFixed(1) }} MB</span>
+                    <button type="button" (click)="removeSecuela(i)"
+                      class="text-gray-400 hover:text-red-500 transition shrink-0 ml-1">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Botón agregar más -->
+            <label class="flex items-center gap-2 border border-dashed rounded-xl px-3 py-2.5 cursor-pointer transition"
+              [class.border-orange-300]="docSecuela.length > 0" [class.hover:border-orange-400]="true"
+              [class.border-gray-200]="docSecuela.length === 0" [class.hover:bg-orange-50]="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-400 shrink-0">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <span class="flex-1 text-sm text-gray-400">
+                {{ docSecuela.length === 0 ? 'Agregar fotos o PDF' : 'Agregar más archivos' }}
+              </span>
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple class="hidden" (change)="addSecuelaFiles($event)">
+            </label>
+          </div>
+          }
+
+          <!-- TELÉFONO DE CONTACTO -->
+          <div>
+            <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+              Teléfono de contacto <span class="text-gray-400 font-normal text-[10px] normal-case">(opcional)</span>
+            </p>
+            <input
+              type="tel"
+              [(ngModel)]="docTelefono"
+              placeholder="Ej: 11 1234-5678"
+              class="w-full border rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              [class.border-blue-400]="docTelefono"
+              [class.border-gray-200]="!docTelefono"
+            />
+          </div>
+
         </div>
 
+        <!-- Barra de progreso + archivo actual -->
+        @if (docSubiendo) {
+          <div class="flex flex-col gap-1.5">
+            <div class="flex justify-between items-center text-xs text-gray-500">
+              <span class="flex items-center gap-1.5">
+                <span class="w-3 h-3 border-2 border-green-500 border-t-transparent rounded-full animate-spin inline-block"></span>
+                {{ docArchivoActual || 'Subiendo archivos...' }}
+              </span>
+              <span class="font-mono font-semibold text-green-600">{{ docProgreso }}%</span>
+            </div>
+            <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div class="h-1.5 bg-green-500 rounded-full transition-all duration-300" [style.width]="docProgreso + '%'"></div>
+            </div>
+          </div>
+        }
+
+        <!-- Error -->
+        @if (docError) {
+          <div class="flex items-start gap-2 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" class="shrink-0 mt-0.5">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p class="text-xs text-red-600 leading-snug">{{ docError }}</p>
+          </div>
+        }
+
+        <!-- Botones -->
         <div class="flex gap-3 justify-end pt-1">
-          <button (click)="cancelarExpediente()"
-            class="px-5 py-2 rounded-xl border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition">
+          <button (click)="cancelarDocs()" [disabled]="docSubiendo"
+            class="px-5 py-2 rounded-xl border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition disabled:opacity-40">
             Cancelar
           </button>
-          <button (click)="confirmarExpediente()"
-            class="btn btn-success">
-            Confirmar
+          <button (click)="confirmarDocs()" [disabled]="confirmarDocsDisabled"
+            class="btn btn-success disabled:opacity-40 flex items-center gap-2">
+            @if (docSubiendo) {
+              <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+            }
+            {{ docSubiendo ? 'Subiendo...' : 'Confirmar' }}
           </button>
         </div>
+
       </div>
     </div>
   }
@@ -248,19 +426,25 @@
 
       <!-- Fila 2: acciones secundarias -->
       <div class="flex items-center gap-2 flex-wrap">
-        <button (click)="solicitarDatoNuevo()"
-          [disabled]="!estadoActivo || !caso || buscando"
-          class="btn btn-ghost-white btn-sm">
-          @if (buscando) {
-            <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-            </svg>
-            Buscando...
-          } @else {
-            Siguiente caso
-          }
-        </button>
+        @if (limiteDiarioAlcanzado) {
+          <div class="flex items-center gap-2 bg-gray-500/80 text-white text-xs font-semibold px-3 py-2 rounded-lg">
+            No hay datos disponibles. Comunicate con el administrador.
+          </div>
+        } @else {
+          <button (click)="solicitarDatoNuevo()"
+            [disabled]="!estadoActivo || !caso || buscando"
+            class="btn btn-ghost-white btn-sm">
+            @if (buscando) {
+              <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+              Buscando...
+            } @else {
+              Siguiente caso
+            }
+          </button>
+        }
         <button (click)="generarAnexo()" class="btn btn-ghost-white btn-sm">ANEXO</button>
         <button (click)="mostrarModalMatricula = true" class="btn btn-ghost-white btn-sm">Matrícula</button>
       </div>
@@ -526,7 +710,7 @@
                     <div>
                       <h3 class="dl-section-head">Domicilios</h3>
                       <div class="flex flex-col gap-2">
-                        @for (d of sumario.domicilios.slice(0, 3); track d.calle) {
+                        @for (d of sumario.domicilios.slice(0, 3); track $index) {
                           <div class="dl-email-row">
                             <p class="text-sm font-medium text-gray-800">{{ d.calle }} {{ d.altura || '' }}{{ d.piso ? ', Piso ' + d.piso : '' }}{{ d.depto ? ' Dpto ' + d.depto : '' }}</p>
                             <p class="text-xs text-gray-400">{{ d.localidad }}{{ d.provincia ? ' · ' + d.provincia : '' }}{{ d.cp ? ' · CP ' + d.cp : '' }}</p>
@@ -569,7 +753,7 @@
 
                                 @if (!relacionContactos[r.cuil]!._noEncontrado) {
                                   @if (relacionContactos[r.cuil]!.celulares && relacionContactos[r.cuil]!.celulares!.length > 0) {
-                                    @for (c of relacionContactos[r.cuil]!.celulares; track c.numCompleto) {
+                                    @for (c of relacionContactos[r.cuil]!.celulares; track $index) {
                                       <div class="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2">
                                         <div>
                                           <p class="text-sm font-semibold text-gray-800">{{ c.numCompleto }}</p>
@@ -583,7 +767,7 @@
                                     }
                                   }
                                   @if (relacionContactos[r.cuil]!.telefonosFijos && relacionContactos[r.cuil]!.telefonosFijos!.length > 0) {
-                                    @for (t of relacionContactos[r.cuil]!.telefonosFijos; track t.numCompleto) {
+                                    @for (t of relacionContactos[r.cuil]!.telefonosFijos; track $index) {
                                       <div class="bg-blue-50 rounded-lg px-3 py-2">
                                         <p class="text-sm font-semibold text-gray-800">{{ t.numCompleto }}</p>
                                         <p class="text-xs text-gray-400">Fijo · {{ t.localidad }}</p>
@@ -790,7 +974,7 @@
                       <td class="px-4 py-3 text-center" (click)="$event.stopPropagation()">
                         <select
                           [ngModel]="c.estado"
-                          (ngModelChange)="cambiarEstadoCaso(c, $event)"
+                          (ngModelChange)="iniciarCambioEstado(c, $event)"
                           [disabled]="cambiandoEstado[c.id ?? '']"
                           class="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white"
                         >
@@ -903,22 +1087,15 @@
                           </svg>
                         }
                         @if (!cambiandoEstado[c.id!]) {
-                          @if (c.estado === 'conabogado') {
-                            <!-- Solo badge sin selector para conabogado -->
-                            <span class="text-xs rounded-full px-2 py-1 font-medium" [class]="getEstadoColor(c.estado)">
-                              Con Abogado
-                            </span>
-                          } @else {
-                            <select
-                              [value]="c.estado"
-                              (change)="iniciarCambioEstado(c, $any($event.target).value)"
-                              class="text-xs rounded-full px-2 py-1 font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300"
-                              [class]="getEstadoColor(c.estado)">
-                              @for (e of TODOS_ESTADOS; track e.value) {
-                                <option [value]="e.value" [selected]="c.estado === e.value">{{ e.label }}</option>
-                              }
-                            </select>
-                          }
+                          <select
+                            [value]="c.estado"
+                            (change)="iniciarCambioEstado(c, $any($event.target).value)"
+                            class="text-xs rounded-full px-2 py-1 font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            [class]="getEstadoColor(c.estado)">
+                            @for (e of TODOS_ESTADOS; track e.value) {
+                              <option [value]="e.value" [selected]="c.estado === e.value">{{ e.label }}</option>
+                            }
+                          </select>
                         }
                       </td>
                       <td class="px-4 py-3 text-center" (click)="$event.stopPropagation()">
@@ -1380,7 +1557,7 @@
                     <span class="text-xs text-gray-700 break-all">{{ mail.direccion }}</span>
                   </div>
                 }
-                @for (dom of (casoModal.certeroData['domicilios'] ?? []).slice(0,2); track dom.calle) {
+                @for (dom of (casoModal.certeroData['domicilios'] ?? []).slice(0,2); track $index) {
                   <div class="flex items-start gap-2">
                     <span class="text-xs text-gray-400 w-12 shrink-0 pt-0.5">📍 Dom</span>
                     <span class="text-xs text-gray-700">{{ dom.calle }} {{ dom.altura || '' }}, {{ dom.localidad }}, {{ dom.provincia }}</span>
@@ -1495,6 +1672,160 @@
           </div>
         }
       </div>
+    </div>
+  </div>
+}
+
+<!-- ── Modal: Iniciar Caso Fuera del Sistema ──────────────────────────── -->
+@if (mostrarModalExterno) {
+  <div class="modal-overlay" (click)="cancelarExterno()">
+    <div class="modal-panel" style="max-width:480px" (click)="$event.stopPropagation()">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-violet-600 font-black text-lg shrink-0">+</div>
+          <div>
+            <h2 class="font-display text-[#0C1A35] text-lg font-bold">Iniciar Caso Fuera del Sistema</h2>
+            @if (extTipo) {
+              <p class="text-sm text-violet-600 font-semibold">
+                {{ extTipo === 'enfermedad_profesional' ? 'Enfermedad Profesional' : extTipo === 'accidente_rechazado' ? 'Accidente Rechazado' : 'Accidente Laboral' }}
+              </p>
+            } @else {
+              <p class="text-sm text-gray-400">Seleccioná el tipo de caso</p>
+            }
+          </div>
+        </div>
+        <button (click)="cancelarExterno()" class="text-gray-400 hover:text-gray-600 p-1">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Paso 1: tipo -->
+      @if (extPaso === 1) {
+        <div class="flex flex-col gap-2 mt-1">
+          <button (click)="seleccionarTipoExterno('enfermedad_profesional')"
+            class="flex items-center gap-3 p-4 rounded-xl border-2 border-transparent bg-gray-50 hover:bg-white hover:border-gray-200 hover:shadow-sm transition text-left">
+            <div class="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600 font-black shrink-0">EP</div>
+            <div>
+              <p class="text-sm font-bold text-gray-800">Enfermedad Profesional</p>
+              <p class="text-xs text-gray-400">Casos de enfermedad de origen laboral</p>
+            </div>
+            <svg class="ml-auto w-4 h-4 text-gray-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+          <button (click)="seleccionarTipoExterno('accidente_rechazado')"
+            class="flex items-center gap-3 p-4 rounded-xl border-2 border-transparent bg-gray-50 hover:bg-white hover:border-gray-200 hover:shadow-sm transition text-left">
+            <div class="w-9 h-9 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600 font-black shrink-0">AR</div>
+            <div>
+              <p class="text-sm font-bold text-gray-800">Accidente Rechazado</p>
+              <p class="text-xs text-gray-400">Accidentes con cobertura rechazada por la ART</p>
+            </div>
+            <svg class="ml-auto w-4 h-4 text-gray-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+          <button (click)="seleccionarTipoExterno('accidente_laboral')"
+            class="flex items-center gap-3 p-4 rounded-xl border-2 border-transparent bg-gray-50 hover:bg-white hover:border-gray-200 hover:shadow-sm transition text-left">
+            <div class="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 font-black shrink-0">AL</div>
+            <div>
+              <p class="text-sm font-bold text-gray-800">Accidente Laboral</p>
+              <p class="text-xs text-gray-400">Accidente de trabajo fuera del sistema</p>
+            </div>
+            <svg class="ml-auto w-4 h-4 text-gray-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+      }
+
+      <!-- Paso 2: datos -->
+      @if (extPaso === 2) {
+        <div class="flex flex-col gap-3">
+
+          <!-- Teléfono -->
+          <div>
+            <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider flex items-center gap-1 mb-1">
+              Teléfono del cliente <span class="text-red-400">*</span>
+            </label>
+            <input [(ngModel)]="extTelefono" type="tel" placeholder="Ej: 3415001234"
+              class="border border-gray-200 rounded-xl px-4 py-2.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-violet-300" />
+          </div>
+
+          <!-- DNI PDF -->
+          <div>
+            <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider flex items-center gap-1 mb-1">
+              DNI (PDF) <span class="text-red-400">*</span>
+            </label>
+            <label class="flex items-center gap-2 border rounded-xl px-3 py-2 cursor-pointer transition"
+              [class.border-violet-400]="extDni" [class.border-gray-300]="!extDni"
+              [class.hover:border-violet-300]="!extDni">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-400 shrink-0">
+                <rect x="3" y="5" width="18" height="14" rx="2"/>
+                <circle cx="9" cy="11" r="2"/><path d="M15 9h2M15 13h2"/>
+              </svg>
+              <span class="text-sm truncate" [class.text-violet-600]="extDni" [class.text-gray-400]="!extDni">
+                {{ extDni ? extDni.name : 'Seleccionar PDF' }}
+              </span>
+              <input type="file" accept=".pdf" class="hidden" (change)="setExtFile($event,'dni')">
+            </label>
+          </div>
+
+          <!-- Anexo PDF -->
+          <div>
+            <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider flex items-center gap-1 mb-1">
+              Anexo (PDF) <span class="text-red-400">*</span>
+            </label>
+            <label class="flex items-center gap-2 border rounded-xl px-3 py-2 cursor-pointer transition"
+              [class.border-violet-400]="extAnexo" [class.border-gray-300]="!extAnexo"
+              [class.hover:border-violet-300]="!extAnexo">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-400 shrink-0">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <span class="text-sm truncate" [class.text-violet-600]="extAnexo" [class.text-gray-400]="!extAnexo">
+                {{ extAnexo ? extAnexo.name : 'Seleccionar PDF' }}
+              </span>
+              <input type="file" accept=".pdf" class="hidden" (change)="setExtFile($event,'anexo')">
+            </label>
+          </div>
+
+          <!-- Barra progreso -->
+          @if (extSubiendo) {
+            <div class="flex flex-col gap-1">
+              <div class="flex justify-between text-xs text-gray-500">
+                <span>Subiendo archivos...</span>
+                <span>{{ extProgreso }}%</span>
+              </div>
+              <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div class="h-2 bg-violet-500 rounded-full transition-all" [style.width]="extProgreso + '%'"></div>
+              </div>
+            </div>
+          }
+
+          <!-- Error -->
+          @if (extError) {
+            <p class="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{{ extError }}</p>
+          }
+
+        </div>
+
+        <!-- Botones -->
+        <div class="flex gap-3 justify-between pt-1">
+          <button (click)="extPaso = 1" [disabled]="extSubiendo" class="text-sm text-gray-500 hover:text-gray-700 transition disabled:opacity-40">
+            ← Cambiar tipo
+          </button>
+          <div class="flex gap-2">
+            <button (click)="cancelarExterno()" [disabled]="extSubiendo"
+              class="px-5 py-2 rounded-xl border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition disabled:opacity-40">
+              Cancelar
+            </button>
+            <button (click)="confirmarExterno()" [disabled]="extSubiendo"
+              class="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition disabled:opacity-50 flex items-center gap-2">
+              @if (extSubiendo) {
+                <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              }
+              {{ extSubiendo ? 'Subiendo...' : 'Guardar caso' }}
+            </button>
+          </div>
+        </div>
+      }
+
     </div>
   </div>
 }

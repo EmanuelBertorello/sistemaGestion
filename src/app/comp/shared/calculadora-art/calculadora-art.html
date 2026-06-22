@@ -1,0 +1,249 @@
+<div class="flex-1 overflow-auto bg-[#f5f6fa] p-5">
+
+  <!-- Header -->
+  <div class="flex items-center gap-3 mb-4">
+    <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+        <rect x="4" y="2" width="16" height="20" rx="2"/>
+        <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/>
+      </svg>
+    </div>
+    <div>
+      <h2 class="text-sm font-bold text-gray-900 leading-none">Calculadora de Riesgos del Trabajo — ART</h2>
+      <p class="text-[11px] text-gray-400 mt-0.5">Leyes 24.557 · 27.348 · DNU 669/19 &nbsp;|&nbsp; 53 × IBM × t × (65 − edad) ÷ 65</p>
+    </div>
+  </div>
+
+  <div class="flex gap-4 items-start">
+
+    <!-- Panel izquierdo -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm w-72 shrink-0 overflow-hidden">
+
+      <div class="bg-[#1a2035] px-4 py-3">
+        <label class="text-[10px] font-semibold text-indigo-300 uppercase tracking-wider block mb-1.5">Ley aplicable</label>
+        <select [(ngModel)]="calcLey" (ngModelChange)="calcResultado = null"
+          class="w-full bg-white/10 border border-white/20 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400">
+          <option value="ley27348" class="text-gray-900 bg-white">Ley 27.348 — RIPTE + Tasa</option>
+          <option value="ley24577" class="text-gray-900 bg-white">Ley 24.557 — Fórmula clásica</option>
+          <option value="dnu669"   class="text-gray-900 bg-white">DNU 669/19 — RIPTE + Interés</option>
+        </select>
+      </div>
+
+      <div class="px-4 py-4 flex flex-col gap-3">
+
+        <div>
+          <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Carátula</label>
+          <input [(ngModel)]="calcCaratula" placeholder="GARCIA JUAN c/ EMPRESA S.A."
+            class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300 placeholder:text-gray-300" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Fecha Accidente</label>
+            <input type="date" [(ngModel)]="calcFechaAccidente"
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+          <div>
+            <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Edad</label>
+            <input type="number" [(ngModel)]="calcEdad" placeholder="42" min="18" max="64"
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+        </div>
+
+        <div>
+          <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Fecha Hasta</label>
+          <input type="date" [(ngModel)]="calcFechaHasta"
+            class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        </div>
+
+        @if (calcLey === 'ley27348' || calcLey === 'dnu669') {
+          <div>
+            <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">RIPTE Vigente</label>
+            <select [(ngModel)]="calcRipte"
+              class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+              @for (r of RIPTE_VALORES; track r.valor) {
+                <option [ngValue]="r.valor">{{ r.label }}</option>
+              }
+            </select>
+          </div>
+        }
+
+        @if (calcLey === 'dnu669') {
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">RIPTE Desde</label>
+              <input type="date" [(ngModel)]="calcDnuDesde"
+                class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+            <div>
+              <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">RIPTE Hasta</label>
+              <input type="date" [(ngModel)]="calcDnuHasta"
+                class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+          </div>
+          <div>
+            <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Tasa Interés Anual (%)</label>
+            <input type="number" [(ngModel)]="calcTasaInteres" placeholder="36" step="0.01"
+              class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+        }
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Período IBM</label>
+            <select [(ngModel)]="calcIbmTipo"
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300">
+              <option value="mensual">Mensual</option>
+              <option value="quincenal">Quincenal</option>
+              <option value="semanal">Semanal</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">Incapacidad %</label>
+            <input type="number" [(ngModel)]="calcIncapacidad" placeholder="35" min="1" max="100"
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+        </div>
+
+        <div class="border-t border-gray-100 pt-2">
+          <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-2">Opciones</label>
+          <div class="flex flex-col gap-2">
+            <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+              <input type="checkbox" [(ngModel)]="calcMuerte" class="w-3.5 h-3.5 accent-indigo-600" />
+              Muerte <span class="text-gray-400">(t = 0,65)</span>
+            </label>
+            <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+              <input type="checkbox" [(ngModel)]="calcAdicional20" class="w-3.5 h-3.5 accent-indigo-600" />
+              Adicional 20% Art. 3 Ley 26.773
+            </label>
+            <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+              <input type="checkbox" [(ngModel)]="calcCapu" class="w-3.5 h-3.5 accent-indigo-600" />
+              CAPU Art. 11 <span class="text-gray-400">(piso 55×RIPTE)</span>
+            </label>
+            @if (calcCapu) {
+              <label class="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none pl-5">
+                <input type="checkbox" [(ngModel)]="calcIncluirAdicional20Capu" class="w-3.5 h-3.5 accent-indigo-600" />
+                + 20% adicional sobre CAPU
+              </label>
+            }
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-1">
+          <button (click)="calcular()"
+            class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg transition shadow-sm">
+            Calcular
+          </button>
+          <button (click)="limpiarCalc()"
+            class="px-3 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition">
+            Limpiar
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Panel derecho -->
+    <div class="flex-1 flex flex-col gap-4 min-w-0">
+
+      <!-- Remuneraciones -->
+      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Últimas remuneraciones</span>
+            <span class="text-[10px] text-gray-400 ml-1">(máx. 12)</span>
+          </div>
+          @if (calcIbm > 0) {
+            <div class="flex items-center gap-1.5">
+              <span class="text-[10px] text-gray-400">IBM mensual:</span>
+              <span class="text-sm font-black text-indigo-600">{{ formatPeso(calcIbm) }}</span>
+            </div>
+          }
+        </div>
+        <div class="grid grid-cols-6 gap-2">
+          @for (rem of calcRems; track $index; let i = $index) {
+            <div>
+              <label class="text-[10px] text-gray-400 block mb-0.5 text-center">{{ i + 1 }}</label>
+              <input type="number" [(ngModel)]="calcRems[i]" placeholder="—" step="100" min="0"
+                class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+                [class.border-indigo-200]="calcRems[i]"
+                [class.bg-indigo-50]="calcRems[i]" />
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Resultado -->
+      @if (calcResultado) {
+        <div class="bg-white rounded-xl border border-indigo-200 shadow-sm overflow-hidden">
+          <div class="bg-gradient-to-r from-indigo-600 to-indigo-500 px-5 py-4 flex items-end justify-between">
+            <div>
+              @if (calcCaratula) { <p class="text-xs text-indigo-200 mb-0.5">{{ calcCaratula }}</p> }
+              <p class="text-xs text-indigo-200">
+                @if (calcLey === 'ley24577') { Ley 24.557 — Fórmula clásica }
+                @if (calcLey === 'ley27348') { Ley 27.348 — RIPTE + Tasa }
+                @if (calcLey === 'dnu669')   { DNU 669/19 — RIPTE + Interés }
+                &nbsp;·&nbsp; Incapacidad {{ calcMuerte ? 'Muerte' : (calcIncapacidad ?? 0) + '%' }}
+                &nbsp;·&nbsp; Edad {{ calcEdad }} años
+              </p>
+            </div>
+            <div class="text-right">
+              <p class="text-[10px] text-indigo-200 mb-0.5">TOTAL INDEMNIZACIÓN</p>
+              <p class="text-3xl font-black text-white">{{ formatPeso(calcResultado.total) }}</p>
+            </div>
+          </div>
+          <div class="px-5 py-4">
+            <div class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 mb-4 font-mono text-xs text-gray-600">
+              @if (calcLey === 'ley24577') { <span>53 × <b>{{ formatPeso(calcResultado.ibmEfectivo) }}</b> × <b>{{ (calcResultado.t * 100).toFixed(0) }}%</b> × (65 − <b>{{ calcEdad }}</b>) ÷ 65</span> }
+              @if (calcLey === 'ley27348') { <span>53 × max(IBM, RIPTE) × <b>{{ (calcResultado.t * 100).toFixed(0) }}%</b> × (65 − <b>{{ calcEdad }}</b>) ÷ 65</span> }
+              @if (calcLey === 'dnu669')   { <span>53 × max(IBM, RIPTE) × <b>{{ (calcResultado.t * 100).toFixed(0) }}%</b> × (65 − <b>{{ calcEdad }}</b>) ÷ 65 + intereses</span> }
+            </div>
+            <div class="flex flex-col divide-y divide-gray-100 text-sm">
+              <div class="flex justify-between items-center py-2">
+                <span class="text-gray-500 text-xs">IBM calculado</span>
+                <span class="font-semibold text-gray-800">{{ formatPeso(calcResultado.ibm) }}</span>
+              </div>
+              @if (calcResultado.ibmEfectivo !== calcResultado.ibm) {
+                <div class="flex justify-between items-center py-2">
+                  <span class="text-gray-500 text-xs">IBM efectivo <span class="text-orange-500">(ajustado a RIPTE)</span></span>
+                  <span class="font-bold text-orange-500">{{ formatPeso(calcResultado.ibmEfectivo) }}</span>
+                </div>
+              }
+              <div class="flex justify-between items-center py-2">
+                <span class="text-gray-500 text-xs">Prestación base <span class="text-gray-400">53 × IBM × t × coef</span></span>
+                <span class="font-semibold text-gray-800">{{ formatPeso(calcResultado.base) }}</span>
+              </div>
+              @if (calcResultado.adicional20 > 0) {
+                <div class="flex justify-between items-center py-2">
+                  <span class="text-gray-500 text-xs">+ 20% Art. 3 Ley 26.773</span>
+                  <span class="font-semibold text-green-600">{{ formatPeso(calcResultado.adicional20) }}</span>
+                </div>
+              }
+              @if (calcResultado.capu > 0) {
+                <div class="flex justify-between items-center py-2">
+                  <span class="text-gray-500 text-xs">+ CAPU Art. 11 <span class="text-gray-400">(diferencia piso 55×RIPTE)</span></span>
+                  <span class="font-semibold text-blue-600">{{ formatPeso(calcResultado.capu) }}</span>
+                </div>
+              }
+              @if (calcLey === 'dnu669' && calcResultado.conIntereses !== calcResultado.total) {
+                <div class="flex justify-between items-center py-2">
+                  <span class="text-gray-700 text-xs font-semibold">Total con intereses <span class="text-gray-400 font-normal">(tasa {{ calcTasaInteres }}% anual)</span></span>
+                  <span class="text-xl font-black text-green-600">{{ formatPeso(calcResultado.conIntereses) }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      } @else {
+        <div class="bg-white rounded-xl border border-gray-200 border-dashed flex flex-col items-center justify-center h-36 gap-2">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5">
+            <rect x="4" y="2" width="16" height="20" rx="2"/>
+            <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/>
+          </svg>
+          <p class="text-xs text-gray-400">Completá los datos y presioná <span class="text-indigo-500 font-semibold">Calcular</span></p>
+        </div>
+      }
+
+    </div>
+  </div>
+</div>

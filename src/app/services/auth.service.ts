@@ -47,7 +47,8 @@ export class AuthService {
   }
 
   isAdmin(): boolean {
-    return this.auth.currentUser?.email === 'bcapeletti@hotmail.com';
+    const email = this.auth.currentUser?.email ?? '';
+    return email === 'bcapeletti@hotmail.com' || email === 'ema-ber2011@live.com.ar';
   }
 
   async cambiarPassword(nuevaPassword: string, passwordActual?: string): Promise<void> {

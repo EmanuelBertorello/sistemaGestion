@@ -1,0 +1,252 @@
+<div class="min-h-screen bg-gray-50 flex flex-col">
+
+  <!-- Topbar -->
+  <header class="bg-[#1a2035] text-white px-6 py-0 flex items-center gap-4 h-12 shadow-lg shrink-0">
+    <div class="flex items-center gap-2 pr-5 border-r border-white/10 shrink-0">
+      <div class="w-6 h-6 rounded bg-violet-500 flex items-center justify-center text-xs font-black">C</div>
+      <span class="text-sm font-bold tracking-tight">Procurar</span>
+    </div>
+    <nav class="flex items-center gap-1">
+      <button (click)="seccion = 'calculadoras'"
+        class="px-3 py-1 text-sm font-medium rounded transition whitespace-nowrap"
+        [class.text-white]="seccion === 'calculadoras'"
+        [class.border-b-2]="seccion === 'calculadoras'"
+        [class.border-violet-400]="seccion === 'calculadoras'"
+        [class.text-gray-300]="seccion !== 'calculadoras'"
+        [class.hover:text-white]="seccion !== 'calculadoras'">
+        Calculadoras
+      </button>
+      <button (click)="seccion = 'agenda'"
+        class="px-3 py-1 text-sm font-medium rounded transition whitespace-nowrap"
+        [class.text-white]="seccion === 'agenda'"
+        [class.border-b-2]="seccion === 'agenda'"
+        [class.border-violet-400]="seccion === 'agenda'"
+        [class.text-gray-300]="seccion !== 'agenda'"
+        [class.hover:text-white]="seccion !== 'agenda'">
+        Agenda
+      </button>
+    </nav>
+    <div class="ml-auto flex items-center gap-2">
+      <button (click)="volver()" class="text-xs text-gray-400 hover:text-white transition px-2 py-1 rounded hover:bg-white/10">← Módulos</button>
+      <button (click)="cerrarSesion()" class="text-xs text-gray-400 hover:text-red-400 transition px-2 py-1 rounded hover:bg-white/10">Salir</button>
+    </div>
+  </header>
+
+  <!-- ── CALCULADORAS ──────────────────────────────────────────────────── -->
+  @if (seccion === 'calculadoras') {
+    <app-calculadora-art class="flex-1 flex flex-col overflow-hidden" />
+  }
+
+  <!-- ── AGENDA ─────────────────────────────────────────────────────────── -->
+  @if (seccion === 'agenda') {
+    <div class="flex-1 overflow-hidden flex flex-col bg-[#f5f6fa]">
+
+      <!-- Sub-toolbar -->
+      <div class="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-3 shrink-0">
+        <button (click)="irMesPrev()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition text-gray-600">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <h2 class="text-sm font-bold text-gray-900 w-44 text-center">{{ calNombreMes }}</h2>
+        <button (click)="irMesSig()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition text-gray-600">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button (click)="irHoy()" class="text-xs font-semibold text-violet-600 hover:bg-violet-50 px-3 py-1.5 rounded-lg transition border border-violet-200">Hoy</button>
+        <div class="flex-1"></div>
+        <button (click)="abrirModalEvento()"
+          class="bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nuevo evento
+        </button>
+      </div>
+
+      <div class="flex flex-1 overflow-hidden">
+
+        <!-- Grid calendario -->
+        <div class="flex-1 overflow-auto p-4">
+          <div class="grid grid-cols-7 mb-1">
+            @for (dia of CAL_DIAS; track dia) {
+              <div class="text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider py-1">{{ dia }}</div>
+            }
+          </div>
+          <div class="grid grid-cols-7 gap-1">
+            @for (celda of calCeldas; track celda.fecha) {
+              <div (click)="calDiaSeleccionado = celda.fecha"
+                class="min-h-[82px] rounded-lg p-1.5 cursor-pointer border transition-all"
+                [class.bg-white]="celda.esActual && calDiaSeleccionado !== celda.fecha"
+                [class.border-gray-200]="celda.esActual && calDiaSeleccionado !== celda.fecha && !celda.esHoy"
+                [class.bg-gray-50]="!celda.esActual"
+                [class.border-transparent]="!celda.esActual || celda.esHoy"
+                [class.border-violet-400]="calDiaSeleccionado === celda.fecha"
+                [class.bg-violet-50]="calDiaSeleccionado === celda.fecha"
+                [class.ring-1]="calDiaSeleccionado === celda.fecha"
+                [class.ring-violet-300]="calDiaSeleccionado === celda.fecha"
+                [class.border-blue-300]="celda.esHoy && calDiaSeleccionado !== celda.fecha"
+                [class.bg-blue-50]="celda.esHoy && calDiaSeleccionado !== celda.fecha">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs font-bold leading-none"
+                    [class.text-gray-800]="celda.esActual && !celda.esHoy"
+                    [class.text-gray-300]="!celda.esActual"
+                    [class.text-white]="celda.esHoy"
+                    [class.bg-violet-600]="celda.esHoy"
+                    [class.rounded-full]="celda.esHoy"
+                    [class.w-5]="celda.esHoy" [class.h-5]="celda.esHoy"
+                    [class.flex]="celda.esHoy" [class.items-center]="celda.esHoy" [class.justify-center]="celda.esHoy">
+                    {{ celda.dia }}
+                  </span>
+                  @if (celda.eventos.length > 0) {
+                    <span class="text-[9px] text-gray-400">{{ celda.eventos.length }}</span>
+                  }
+                </div>
+                @for (ev of celda.eventos.slice(0, 3); track ev.id) {
+                  <div class="flex items-center gap-1 mb-0.5 rounded px-1 py-0.5"
+                    [class.bg-rose-100]="ev.tipo === 'audiencia'"
+                    [class.bg-amber-100]="ev.tipo === 'vencimiento'"
+                    [class.bg-blue-100]="ev.tipo === 'cita'"
+                    [class.bg-gray-100]="ev.tipo === 'otro'">
+                    <div class="w-1 h-1 rounded-full shrink-0"
+                      [class.bg-rose-500]="ev.tipo === 'audiencia'"
+                      [class.bg-amber-500]="ev.tipo === 'vencimiento'"
+                      [class.bg-blue-500]="ev.tipo === 'cita'"
+                      [class.bg-gray-400]="ev.tipo === 'otro'"></div>
+                    <span class="text-[10px] leading-tight truncate"
+                      [class.text-rose-700]="ev.tipo === 'audiencia'"
+                      [class.text-amber-700]="ev.tipo === 'vencimiento'"
+                      [class.text-blue-700]="ev.tipo === 'cita'"
+                      [class.text-gray-600]="ev.tipo === 'otro'">{{ ev.titulo }}</span>
+                  </div>
+                }
+                @if (celda.eventos.length > 3) {
+                  <p class="text-[9px] text-gray-400 pl-1">+{{ celda.eventos.length - 3 }} más</p>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Panel lateral -->
+        <div class="w-72 shrink-0 bg-white border-l border-gray-100 flex flex-col overflow-hidden">
+          @if (calDiaSeleccionado) {
+            <div class="px-4 pt-4 pb-3 border-b border-gray-100">
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-bold text-gray-900">
+                  {{ calDiaSeleccionado | date:'EEEE d' : '' : 'es' }}
+                </p>
+                <button (click)="abrirModalEvento(calDiaSeleccionado)"
+                  class="text-xs text-violet-600 font-semibold hover:bg-violet-50 px-2 py-1 rounded-lg transition">+ Agregar</button>
+              </div>
+              <p class="text-xs text-gray-400">{{ calDiaSeleccionado | date:'MMMM y' : '' : 'es' }}</p>
+            </div>
+            <div class="flex-1 overflow-auto px-3 py-3 flex flex-col gap-2">
+              @if (calEventosDia.length === 0) {
+                <div class="flex flex-col items-center justify-center h-24 text-center">
+                  <p class="text-xs text-gray-400">Sin eventos este día</p>
+                  <button (click)="abrirModalEvento(calDiaSeleccionado)" class="text-xs text-violet-500 mt-1 hover:underline">Agregar evento</button>
+                </div>
+              }
+              @for (ev of calEventosDia; track ev.id) {
+                <div class="rounded-xl border p-3 hover:shadow-sm transition group"
+                  [class.border-rose-200]="ev.tipo === 'audiencia'"
+                  [class.border-amber-200]="ev.tipo === 'vencimiento'"
+                  [class.border-blue-200]="ev.tipo === 'cita'"
+                  [class.border-gray-200]="ev.tipo === 'otro'">
+                  <div class="flex items-start justify-between gap-1">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-1.5 mb-1">
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full" [class]="tipoTextColor(ev.tipo)">{{ tipoLabel(ev.tipo) }}</span>
+                        @if (ev.hora) { <span class="text-[10px] text-gray-400 font-mono">{{ ev.hora }}</span> }
+                      </div>
+                      <p class="text-xs font-semibold text-gray-800 leading-tight">{{ ev.titulo }}</p>
+                      @if (ev.expedienteNro) { <p class="text-[10px] text-gray-400 mt-0.5">Exp. {{ ev.expedienteNro }}</p> }
+                    </div>
+                    <button (click)="eliminarEvento(ev.id)" class="opacity-0 group-hover:opacity-100 transition text-gray-300 hover:text-red-400 shrink-0 mt-0.5">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="px-4 pt-4 pb-3 border-b border-gray-100">
+              <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Próximos eventos</p>
+            </div>
+            <div class="flex-1 overflow-auto px-3 py-3 flex flex-col gap-2">
+              @if (calProxEventos.length === 0) {
+                <div class="flex flex-col items-center justify-center h-24 text-center">
+                  <p class="text-xs text-gray-400">No hay eventos próximos</p>
+                </div>
+              }
+              @for (ev of calProxEventos; track ev.id) {
+                <div (click)="calDiaSeleccionado = ev.fecha"
+                  class="rounded-xl border border-gray-200 p-3 hover:border-violet-200 hover:bg-violet-50/30 cursor-pointer transition">
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <div class="w-1.5 h-1.5 rounded-full" [class]="tipoColor(ev.tipo)"></div>
+                    <span class="text-[10px] font-bold text-gray-500">{{ ev.fecha | date:'d MMM' : '' : 'es' }}</span>
+                    @if (ev.hora) { <span class="text-[10px] text-gray-400 font-mono">{{ ev.hora }}</span> }
+                  </div>
+                  <p class="text-xs font-semibold text-gray-800 truncate">{{ ev.titulo }}</p>
+                  @if (ev.expedienteNro) { <p class="text-[10px] text-gray-400 mt-0.5">Exp. {{ ev.expedienteNro }}</p> }
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+      </div>
+    </div>
+  }
+
+</div>
+
+<!-- Modal nuevo evento -->
+@if (mostrarModalEvento) {
+  <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" (click)="mostrarModalEvento = false">
+    <div class="bg-white rounded-2xl shadow-xl p-6 w-96" (click)="$event.stopPropagation()">
+      <h3 class="text-base font-bold text-gray-900 mb-4">Nuevo evento</h3>
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs text-gray-500 font-medium block mb-1">Título *</label>
+          <input [(ngModel)]="nuevoEvento.titulo" placeholder="Ej: Audiencia GARCIA JUAN"
+            class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-violet-300" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">Fecha *</label>
+            <input type="date" [(ngModel)]="nuevoEvento.fecha"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-violet-300" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">Hora</label>
+            <input type="time" [(ngModel)]="nuevoEvento.hora"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-violet-300" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">Tipo</label>
+            <select [(ngModel)]="nuevoEvento.tipo"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-violet-300">
+              <option value="audiencia">Audiencia</option>
+              <option value="vencimiento">Vencimiento</option>
+              <option value="cita">Cita</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">N° Expediente</label>
+            <input [(ngModel)]="nuevoEvento.expedienteNro" placeholder="Ej: 10006/26"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-violet-300" />
+          </div>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 font-medium block mb-1">Descripción</label>
+          <textarea [(ngModel)]="nuevoEvento.descripcion" rows="2" placeholder="Notas adicionales..."
+            class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-violet-300 resize-none"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-5 justify-end">
+        <button (click)="mostrarModalEvento = false" class="px-4 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition">Cancelar</button>
+        <button (click)="agregarEvento()" class="px-4 py-2 rounded-xl text-sm bg-violet-600 hover:bg-violet-700 text-white font-semibold transition">Agregar</button>
+      </div>
+    </div>
+  </div>
+}

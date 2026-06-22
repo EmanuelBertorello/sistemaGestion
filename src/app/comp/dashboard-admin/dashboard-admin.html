@@ -167,6 +167,17 @@
         <span class="sidebar-item-label">Noticias</span>
       </button>
 
+      <button class="sidebar-item" data-label="Llamadoras Propias"
+        [class.active]="seccionActiva === 'llamadoras'"
+        (click)="seccionActiva = 'llamadoras'; semanaOffset = 0">
+        <span class="sidebar-item-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+          </svg>
+        </span>
+        <span class="sidebar-item-label">Llamadoras Propias</span>
+      </button>
+
     </div>
 
     </div><!-- /sidebar-body -->
@@ -1100,7 +1111,7 @@
           }
           <div class="flex flex-col gap-2">
             @for (ll of todosLlamadores; track ll.apodo) {
-              <div class="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
+              <div class="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 flex-wrap">
                 <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-bold text-blue-700 shrink-0">
                   {{ ll.apodo.charAt(0).toUpperCase() }}
                 </div>
@@ -1112,6 +1123,22 @@
                   <option value="volumen">Volumen</option>
                   <option value="highticket">HighTicket</option>
                 </select>
+                <!-- Requisitos al marcar "Acepto" -->
+                <label class="flex items-center gap-1.5 text-xs text-gray-600 ml-2 cursor-pointer">
+                  <input type="checkbox" [(ngModel)]="requiereDocsConfig[ll.apodo]"
+                    (change)="toggleRequiereDocs(ll.apodo)"
+                    class="accent-green-600 w-4 h-4"/>
+                  Requiere PDFs (Anexo/DNI)
+                </label>
+                <label class="flex items-center gap-1.5 text-xs text-gray-600 ml-2 cursor-pointer">
+                  <input type="checkbox" [(ngModel)]="requiereExpedienteConfig[ll.apodo]"
+                    (change)="toggleRequiereExpediente(ll.apodo)"
+                    class="accent-blue-600 w-4 h-4"/>
+                  Carga su nro. de expediente
+                </label>
+                @if (requisitosMensaje[ll.apodo]) {
+                  <span class="text-xs text-green-600">{{ requisitosMensaje[ll.apodo] }}</span>
+                }
               </div>
             }
           </div>
@@ -1827,6 +1854,172 @@
             </div>
             <p class="text-sm text-gray-600 whitespace-pre-line">{{ noticia.cuerpo }}</p>
             <p class="text-xs text-gray-400">— {{ noticia.autor }}</p>
+          </div>
+        }
+
+      </div>
+    }
+
+  <!-- ══════════════════ LLAMADORAS PROPIAS ══════════════════ -->
+    @if (seccionActiva === 'llamadoras') {
+      <div class="flex flex-col gap-6 w-full">
+
+        <!-- Header + navegación semanal -->
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-gray-800">Llamadoras Propias</h2>
+            <p class="text-xs text-gray-400 mt-0.5">$40.000 por acepto · Semana {{ semanaLabel }}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button (click)="semanaOffset = semanaOffset - 1"
+              class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 transition">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <span class="text-sm font-semibold text-gray-700 min-w-[120px] text-center">{{ semanaLabel }}</span>
+            <button (click)="semanaOffset = semanaOffset + 1"
+              [disabled]="esSemanaActual"
+              class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 transition disabled:opacity-30 disabled:cursor-not-allowed">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <button (click)="semanaOffset = 0" [disabled]="esSemanaActual"
+              class="text-xs text-blue-600 hover:underline px-2 disabled:opacity-30 disabled:cursor-not-allowed">
+              Hoy
+            </button>
+          </div>
+        </div>
+
+        <!-- Cards de llamadoras -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          @for (ll of statsLlamadoras; track ll.label) {
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-4">
+
+              <!-- Nombre + total -->
+              <div class="flex items-start justify-between">
+                <div>
+                  <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">{{ ll.label }}</p>
+                  <p class="text-3xl font-black mt-1"
+                    [class.text-green-600]="ll.aceptos > 0"
+                    [class.text-gray-300]="ll.aceptos === 0">
+                    {{ ll.aceptos }}
+                  </p>
+                  <p class="text-xs text-gray-400 mt-0.5">acepto{{ ll.aceptos !== 1 ? 's' : '' }} esta semana</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-xs text-gray-400 font-medium">A pagar</p>
+                  <p class="text-base font-black mt-0.5"
+                    [class.text-green-700]="ll.totalPagar > 0"
+                    [class.text-gray-300]="ll.totalPagar === 0">
+                    ${{ ll.totalPagar.toLocaleString('es-AR') }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Heatmap días Lun-Vie -->
+              <div>
+                <p class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1.5">Almanaque</p>
+                <div class="flex gap-1.5">
+                  @for (dia of diasSemana(semanaInfo.dias); track dia.iso) {
+                    <div class="flex flex-col items-center gap-1 flex-1">
+                      <span class="text-[9px] text-gray-400 font-medium">{{ dia.label }}</span>
+                      <div class="w-full aspect-square rounded-md transition-all cursor-default"
+                        [style.background]="heatColor(ll.porDia[dia.iso] ?? 0)"
+                        [title]="(ll.nombresPorDia[dia.iso]?.length ? ll.nombresPorDia[dia.iso].join('\n') : 'Sin aceptos')">
+                        @if ((ll.porDia[dia.iso] ?? 0) > 0) {
+                          <span class="flex items-center justify-center w-full h-full text-[9px] font-bold text-white">
+                            {{ ll.porDia[dia.iso] }}
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+
+            </div>
+          }
+        </div>
+
+        <!-- Resumen total de la semana -->
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-4 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-bold text-sm">∑</div>
+              <div>
+                <p class="text-sm font-bold text-gray-700">Total semana</p>
+                <p class="text-xs text-gray-400">Suma de todas las llamadoras</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-black text-green-700">
+                ${{ statsLlamadoras.reduce((s, l) => s + l.totalPagar, 0).toLocaleString('es-AR') }}
+              </p>
+              <p class="text-xs text-gray-400">
+                {{ statsLlamadoras.reduce((s, l) => s + l.aceptos, 0) }} aceptos en total
+              </p>
+            </div>
+          </div>
+
+          <!-- Detalle por llamadora -->
+          <div class="border-t border-gray-100 pt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            @for (stat of statsLlamadoras; track stat.label) {
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-semibold text-gray-500">{{ stat.label }}</span>
+                <span class="text-sm font-bold"
+                  [class.text-green-700]="stat.totalPagar > 0"
+                  [class.text-gray-300]="stat.totalPagar === 0">
+                  ${{ stat.totalPagar.toLocaleString('es-AR') }}
+                </span>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Resumen detallado de casos de la semana -->
+        @if (resumenCasosSemana.length > 0) {
+          <div class="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-4 flex flex-col gap-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm">📋</div>
+                <div>
+                  <p class="text-sm font-bold text-gray-700">Detalle de aceptos</p>
+                  <p class="text-xs text-gray-400">{{ resumenCasosSemana.length }} caso{{ resumenCasosSemana.length !== 1 ? 's' : '' }} esta semana</p>
+                </div>
+              </div>
+              <button (click)="exportarExcelSemana()"
+                class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Descargar Excel
+              </button>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b border-gray-200 text-left text-gray-400 uppercase tracking-wider">
+                    <th class="py-2 pr-3 font-semibold">Llamadora</th>
+                    <th class="py-2 pr-3 font-semibold">Trabajador</th>
+                    <th class="py-2 pr-3 font-semibold">CUIL</th>
+                    <th class="py-2 pr-3 font-semibold">ART</th>
+                    <th class="py-2 pr-3 font-semibold">Días ILT</th>
+                    <th class="py-2 pr-3 font-semibold">Fecha</th>
+                    <th class="py-2 text-right font-semibold">Pago</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of resumenCasosSemana; track $index) {
+                    <tr class="border-b border-gray-50 hover:bg-gray-50 transition">
+                      <td class="py-2 pr-3 font-semibold text-gray-700">{{ r.llamadora }}</td>
+                      <td class="py-2 pr-3 text-gray-600">{{ r.trabajador }}</td>
+                      <td class="py-2 pr-3 text-gray-500 font-mono">{{ r.cuil }}</td>
+                      <td class="py-2 pr-3 text-gray-500">{{ r.art }}</td>
+                      <td class="py-2 pr-3 text-gray-500 text-center">{{ r.diasIlt }}</td>
+                      <td class="py-2 pr-3 text-gray-500">{{ r.fecha }}</td>
+                      <td class="py-2 text-right font-bold text-green-700">${{ PAGO_POR_ACEPTO.toLocaleString('es-AR') }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           </div>
         }
 

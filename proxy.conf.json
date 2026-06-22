@@ -1,4 +1,10 @@
 {
+  "/nvidia-api": {
+    "target": "https://integrate.api.nvidia.com",
+    "changeOrigin": true,
+    "secure": true,
+    "pathRewrite": { "^/nvidia-api": "" }
+  },
   "/certero-api": {
     "target": "https://certero.com.ar",
     "secure": true,

@@ -10,7 +10,7 @@ import { AnexoService } from '../../services/anexo.service';
 import { CasoModel, EstadoCaso } from '../dashboard-llamador/caso.model';
 import * as XLSX from 'xlsx';
 
-type SeccionActiva = 'estadisticas' | 'acepto' | 'interesado' | 'sincontacto' | 'conabogado' | 'nointeresado' | 'cargar' | 'historial' | 'duplicados' | 'noticias' | 'cola' | 'ventasi';
+type SeccionActiva = 'estadisticas' | 'acepto' | 'interesado' | 'sincontacto' | 'conabogado' | 'nointeresado' | 'cargar' | 'historial' | 'duplicados' | 'noticias' | 'cola' | 'ventasi' | 'llamadoras';
 
 type EstadoUpload = 'idle' | 'preview' | 'subiendo' | 'limpiando' | 'done' | 'error';
 
@@ -381,13 +381,24 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   colaReglaAsignados = 0;
 
   // Límites de pendientes por llamador
-  limitesConfig: Record<string, number> = {};   // apodo → límite actual en edición
+  limitesConfig: Record<string, number> = {};
   limitesGuardando: Record<string, boolean> = {};
   limitesMensaje: Record<string, string> = {};
 
+  // Límites diarios por llamador
+  limiteDiarioConfig: Record<string, number> = {};
+  limiteDiarioGuardando: Record<string, boolean> = {};
+  limiteDiarioMensaje: Record<string, string> = {};
+
   // Perfiles por llamador
   perfilesConfig: Record<string, string> = {};
-  todosLlamadores: Array<{ apodo: string; perfil: string; limitePendientes: number }> = [];
+  todosLlamadores: Array<{ apodo: string; perfil: string; limitePendientes: number; limiteDiario: number; requiereDocs: boolean; requiereExpediente: boolean }> = [];
+
+  // Requisitos de "Acepto" por llamador (PDFs / nro de expediente)
+  requiereDocsConfig: Record<string, boolean> = {};
+  requiereExpedienteConfig: Record<string, boolean> = {};
+  requisitosGuardando: Record<string, boolean> = {};
+  requisitosMensaje: Record<string, string> = {};
 
   // Liberar/Eliminar casos por llamador
   liberandoApodo: Record<string, boolean> = {};
@@ -1282,6 +1293,9 @@ export class DashboardAdmin implements OnInit, OnDestroy {
       for (const ll of this.todosLlamadores) {
         this.perfilesConfig[ll.apodo] = ll.perfil;
         if (!(ll.apodo in this.limitesConfig)) this.limitesConfig[ll.apodo] = ll.limitePendientes;
+        if (!(ll.apodo in this.limiteDiarioConfig)) this.limiteDiarioConfig[ll.apodo] = ll.limiteDiario;
+        this.requiereDocsConfig[ll.apodo] = ll.requiereDocs;
+        this.requiereExpedienteConfig[ll.apodo] = ll.requiereExpediente;
       }
       // Cargar config para apodos de colaEstados que no estén en todosLlamadores (mismatch de casing)
       const apodosYaCargados = new Set(this.todosLlamadores.map(l => l.apodo.toLowerCase()));
@@ -1291,10 +1305,31 @@ export class DashboardAdmin implements OnInit, OnDestroy {
           const cfg = await this.fs.getConfigLlamador(apodo);
           this.perfilesConfig[apodo] = cfg.perfil ?? '';
           this.limitesConfig[apodo] = cfg.limitePendientes;
+          this.limiteDiarioConfig[apodo] = cfg.limiteDiario;
+          this.requiereDocsConfig[apodo] = cfg.requiereDocs;
+          this.requiereExpedienteConfig[apodo] = cfg.requiereExpediente;
         }
       }
     } finally {
       this.colaCargando = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async guardarLimiteDiarioLlamador(apodo: string): Promise<void> {
+    this.limiteDiarioGuardando[apodo] = true;
+    this.limiteDiarioMensaje[apodo] = '';
+    this.cdr.detectChanges();
+    try {
+      const val = Number(this.limiteDiarioConfig[apodo]) || 0;
+      await this.fs.setLimiteDiarioLlamador(apodo, val);
+      this.limiteDiarioConfig[apodo] = val;
+      this.limiteDiarioMensaje[apodo] = '✓';
+      setTimeout(() => { this.limiteDiarioMensaje[apodo] = ''; this.cdr.detectChanges(); }, 2000);
+    } catch {
+      this.limiteDiarioMensaje[apodo] = 'Error';
+    } finally {
+      this.limiteDiarioGuardando[apodo] = false;
       this.cdr.detectChanges();
     }
   }
@@ -1368,6 +1403,34 @@ export class DashboardAdmin implements OnInit, OnDestroy {
     await this.fs.setPerfilLlamador(apodo, perfil);
   }
 
+  async toggleRequiereDocs(apodo: string): Promise<void> {
+    this.requisitosGuardando[apodo] = true;
+    this.requisitosMensaje[apodo] = '';
+    this.cdr.detectChanges();
+    try {
+      await this.fs.setRequiereDocsLlamador(apodo, this.requiereDocsConfig[apodo]);
+      this.requisitosMensaje[apodo] = '✓';
+      setTimeout(() => { this.requisitosMensaje[apodo] = ''; this.cdr.detectChanges(); }, 2000);
+    } finally {
+      this.requisitosGuardando[apodo] = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async toggleRequiereExpediente(apodo: string): Promise<void> {
+    this.requisitosGuardando[apodo] = true;
+    this.requisitosMensaje[apodo] = '';
+    this.cdr.detectChanges();
+    try {
+      await this.fs.setRequiereExpedienteLlamador(apodo, this.requiereExpedienteConfig[apodo]);
+      this.requisitosMensaje[apodo] = '✓';
+      setTimeout(() => { this.requisitosMensaje[apodo] = ''; this.cdr.detectChanges(); }, 2000);
+    } finally {
+      this.requisitosGuardando[apodo] = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   // ── Reasignación de historial ─────────────────────────────
   usuariosReasig: Array<{ apodo: string; email: string }> = [];
   reasigDesde = '';
@@ -1393,8 +1456,8 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   async cargarUsuariosReasig(): Promise<void> {
     const usuarios = await this.fs.getUsuarios();
     this.usuariosReasig = usuarios
-      .filter(u => u.apodo?.trim())
-      .map(u => ({ apodo: u.apodo.trim(), email: u.email }))
+      .filter(u => u.email)
+      .map(u => ({ apodo: u.apodo?.trim() || u.email.split('@')[0], email: u.email }))
       .sort((a, b) => a.apodo.localeCompare(b.apodo));
   }
 
@@ -1547,6 +1610,140 @@ export class DashboardAdmin implements OnInit, OnDestroy {
       this.cdr.detectChanges();
     }
   }
+
+  // ── Llamadoras Propias ────────────────────────────────────
+
+  readonly LLAMADORAS_PROPIAS = [
+    { label: 'Nanci',  apodo: 'nanci',  email: '' },
+    { label: 'CR',     apodo: 'cami',   email: 'cr4361990@gmail.com' },
+    { label: 'Daiana', apodo: 'daiana', email: 'daianadagostino18@gmail.com' },
+    { label: 'Iara',   apodo: 'iara',   email: '' },
+  ];
+  readonly PAGO_POR_ACEPTO = 40_000;
+
+  semanaOffset = 0; // 0 = semana actual, negativo = semanas pasadas
+
+  get semanaInfo(): { inicio: Date; fin: Date; dias: Date[] } {
+    const hoy = new Date();
+    const dow = hoy.getDay(); // 0=dom
+    const diffLun = dow === 0 ? -6 : 1 - dow;
+    const lun = new Date(hoy);
+    lun.setDate(hoy.getDate() + diffLun + this.semanaOffset * 7);
+    lun.setHours(0, 0, 0, 0);
+    const dias: Date[] = Array.from({ length: 5 }, (_, i) => {
+      const d = new Date(lun); d.setDate(lun.getDate() + i); return d;
+    });
+    const fin = new Date(dias[4]); fin.setHours(23, 59, 59, 999);
+    return { inicio: lun, fin, dias };
+  }
+
+  get semanaLabel(): string {
+    const { inicio, fin } = this.semanaInfo;
+    const fmt = (d: Date) => d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+    return `${fmt(inicio)} — ${fmt(fin)}`;
+  }
+
+  private matchLlamadora(c: CasoModel, ll: { apodo: string; email: string }): boolean {
+    const em = (c.procesadoPor || '').toLowerCase();
+    const ap = (c.ASGINADO   || '').toLowerCase();
+    if (ll.email && em === ll.email.toLowerCase()) return true;
+    if (ll.apodo && ap === ll.apodo.toLowerCase()) return true;
+    return false;
+  }
+
+  private tsToMs(raw: any): number {
+    if (!raw) return 0;
+    if (typeof raw.toDate === 'function') return raw.toDate().getTime();
+    const ms = new Date(raw).getTime();
+    return isNaN(ms) ? 0 : ms;
+  }
+
+  get statsLlamadoras() {
+    const { inicio, fin, dias } = this.semanaInfo;
+    const t0 = inicio.getTime(), t1 = fin.getTime();
+    return this.LLAMADORAS_PROPIAS.map(ll => {
+      const casos = this.historial.filter(c => {
+        if (c.estado !== 'acepto') return false;
+        if (!this.matchLlamadora(c, ll)) return false;
+        const ts = this.tsToMs(c.procesadoTimestamp);
+        return ts >= t0 && ts <= t1;
+      });
+      const porDia: Record<string, number> = {};
+      const nombresPorDia: Record<string, string[]> = {};
+      dias.forEach(d => { const k = d.toISOString().slice(0, 10); porDia[k] = 0; nombresPorDia[k] = []; });
+      casos.forEach(c => {
+        const ms = this.tsToMs(c.procesadoTimestamp);
+        if (ms) {
+          const k = new Date(ms).toISOString().slice(0, 10);
+          if (k in porDia) { porDia[k]++; nombresPorDia[k].push(c.Trabajador ?? c.CUIL ?? '—'); }
+        }
+      });
+      return { label: ll.label, aceptos: casos.length, totalPagar: casos.length * this.PAGO_POR_ACEPTO, porDia, nombresPorDia, casos };
+    });
+  }
+
+  get resumenCasosSemana(): Array<{ llamadora: string; trabajador: string; cuil: string; art: string; diasIlt: string; fecha: string }> {
+    const rows: Array<{ llamadora: string; trabajador: string; cuil: string; art: string; diasIlt: string; fecha: string }> = [];
+    for (const ll of this.statsLlamadoras) {
+      for (const c of ll.casos) {
+        const ms = this.tsToMs(c.procesadoTimestamp);
+        const fecha = ms ? new Date(ms).toLocaleDateString('es-AR') : '—';
+        rows.push({
+          llamadora: ll.label,
+          trabajador: c.Trabajador ?? '—',
+          cuil: c.CUIL ?? '—',
+          art: c.ART ?? '—',
+          diasIlt: c.Dias_ILT ?? '—',
+          fecha,
+        });
+      }
+    }
+    return rows;
+  }
+
+  exportarExcelSemana(): void {
+    const XLSX = (window as any)['XLSX'];
+    if (!XLSX) {
+      import('xlsx').then(mod => {
+        (window as any)['XLSX'] = mod;
+        this._generarExcel(mod);
+      });
+    } else {
+      this._generarExcel(XLSX);
+    }
+  }
+
+  private _generarExcel(XLSX: any): void {
+    const filas = this.resumenCasosSemana.map(r => ({
+      Llamadora: r.llamadora,
+      Trabajador: r.trabajador,
+      CUIL: r.cuil,
+      ART: r.art,
+      'Días ILT': r.diasIlt,
+      'Fecha Acepto': r.fecha,
+      Pago: this.PAGO_POR_ACEPTO,
+    }));
+    const totalRow = { Llamadora: 'TOTAL', Trabajador: '', CUIL: '', ART: '', 'Días ILT': '', 'Fecha Acepto': '', Pago: filas.reduce((s, r) => s + r.Pago, 0) };
+    filas.push(totalRow);
+    const ws = XLSX.utils.json_to_sheet(filas);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Resumen Semana');
+    XLSX.writeFile(wb, `Llamadoras_${this.semanaLabel.replace(/\s/g, '_')}.xlsx`);
+  }
+
+  heatColor(n: number): string {
+    if (n === 0) return '#e2e8f0';
+    if (n === 1) return '#86efac';
+    if (n === 2) return '#22c55e';
+    return '#15803d';
+  }
+
+  diasSemana(dias: Date[]): Array<{ iso: string; label: string }> {
+    const nombres = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
+    return dias.map((d, i) => ({ iso: d.toISOString().slice(0, 10), label: nombres[i] }));
+  }
+
+  get esSemanaActual(): boolean { return this.semanaOffset === 0; }
 
   // ── Nav ──────────────────────────────────────────────────
 

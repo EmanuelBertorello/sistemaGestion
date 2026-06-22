@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { EXPEDIENTES_SEED } from './expedientes.seed';
 import {
   getFirestore,
   Firestore,
@@ -24,11 +25,16 @@ import {
 } from 'firebase/firestore';
 import { firebaseApp } from '../firebase.config';
 import { CasoModel, EstadoCaso } from '../comp/dashboard-llamador/caso.model';
+import { Expediente, EtapaExpediente } from '../comp/dashboard-abogado/expediente.model';
+
+export type RolUsuario = 'llamador' | 'abogado' | 'josefina';
 
 export interface UsuarioApp {
   uid: string;
   email: string;
   apodo: string;
+  rol?: RolUsuario;
+  modulos?: string[];
   creadoEn?: any;
 }
 
@@ -61,6 +67,7 @@ export interface LlamadorStats {
 const COL_CASOS = 'BDmadre';
 const COL_CASOS_VENTA_SI = 'casos_ventasi';
 const COL_CASOS_ARCHIVO = 'casos_archivo';
+const COL_EXPEDIENTES = 'expedientes';
 const COL_USUARIOS = 'usuarios';
 const COL_NOTIFICACIONES = 'notificaciones';
 const COL_PRESENCIA = 'presencia';
@@ -433,14 +440,19 @@ export class FirestoreService {
     const apodoEfectivo = (asignado || procesadoPor).trim();
     const entrada: any = { estado, timestamp: ts, por: procesadoPor, apodo: apodoEfectivo };
     if (comentario) entrada.comentario = comentario;
-    await updateDoc(doc(this.db, COL_CASOS, id), {
+    const updateData: any = {
       procesado: true,
       estado,
       procesadoPor,
       ASGINADO: apodoEfectivo,
       procesadoTimestamp: serverTimestamp(),
       historialEstados: arrayUnion(entrada)
-    });
+    };
+    if (estado === 'acepto') {
+      const hoy = new Date();
+      updateData.fechaAcepto = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+    }
+    await updateDoc(doc(this.db, COL_CASOS, id), updateData);
     if (estado === 'acepto' && caso) {
       await this.crearNotificacionAcepto(id, caso, apodoEfectivo);
     }
@@ -513,6 +525,8 @@ export class FirestoreService {
       actualizar['procesado'] = true;
       actualizar['procesadoPor'] = email;
       actualizar['ASGINADO'] = apodo || email.split('@')[0];
+    }
+    if (email && email !== 'admin') {
       actualizar['procesadoTimestamp'] = serverTimestamp();
     }
 
@@ -561,6 +575,43 @@ export class FirestoreService {
     const snap = await getDocs(collection(this.db, COL_USUARIOS));
     const usuario = snap.docs.map(d => d.data() as UsuarioApp).find(u => u.email === email);
     return usuario?.apodo || email;
+  }
+
+  async getRolPorEmail(email: string): Promise<RolUsuario> {
+    const snap = await getDocs(query(collection(this.db, COL_USUARIOS), where('email', '==', email)));
+    if (!snap.empty) {
+      const rol = snap.docs[0].data()['rol'] as RolUsuario | undefined;
+      if (rol === 'abogado') return 'abogado';
+      if (rol === 'josefina') return 'josefina';
+    }
+    return 'llamador';
+  }
+
+  async getModulosPorEmail(email: string): Promise<string[]> {
+    const snap = await getDocs(query(collection(this.db, COL_USUARIOS), where('email', '==', email)));
+    if (!snap.empty) {
+      const data = snap.docs[0].data() as any;
+      if (Array.isArray(data.modulos) && data.modulos.length > 0) {
+        const modulos: string[] = data.modulos;
+        // Iniciado/josefina también acceden al dashboard de abogado
+        if (modulos.includes('iniciado') || modulos.includes('josefina')) {
+          return [...new Set([...modulos, 'abogado'])];
+        }
+        return modulos;
+      }
+      const rol = data.rol as RolUsuario | undefined;
+      if (rol === 'abogado')  return ['abogado'];
+      // josefina por rol: puede ver su dashboard + el de abogado
+      if (rol === 'josefina') return ['josefina', 'abogado'];
+    }
+    return ['llamador'];
+  }
+
+  async setRolUsuario(email: string, rol: RolUsuario): Promise<void> {
+    const snap = await getDocs(query(collection(this.db, COL_USUARIOS), where('email', '==', email)));
+    if (!snap.empty) {
+      await updateDoc(snap.docs[0].ref, { rol });
+    }
   }
 
   async asegurarUsuarioRegistrado(uid: string, email: string): Promise<void> {
@@ -791,7 +842,7 @@ export class FirestoreService {
     return snap.docs.map(d => d.data() as UsuarioApp);
   }
 
-  async getTodosLlamadoresConPerfil(): Promise<Array<{ apodo: string; perfil: string; limitePendientes: number }>> {
+  async getTodosLlamadoresConPerfil(): Promise<Array<{ apodo: string; perfil: string; limitePendientes: number; limiteDiario: number; requiereDocs: boolean; requiereExpediente: boolean }>> {
     const [usuariosSnap, configSnap] = await Promise.all([
       getDocs(collection(this.db, COL_USUARIOS)),
       getDocs(collection(this.db, 'config_llamadores')),
@@ -804,7 +855,14 @@ export class FirestoreService {
       .filter(u => u.apodo && u.apodo.trim())
       .map(u => {
         const cfg = configMap.get(u.apodo) ?? {};
-        return { apodo: u.apodo, perfil: cfg.perfil ?? '', limitePendientes: cfg.limitePendientes ?? 35 };
+        return {
+          apodo: u.apodo,
+          perfil: cfg.perfil ?? '',
+          limitePendientes: cfg.limitePendientes ?? 35,
+          limiteDiario: cfg.limiteDiario ?? 0,
+          requiereDocs: cfg.requiereDocs ?? true,
+          requiereExpediente: cfg.requiereExpediente ?? false,
+        };
       })
       .sort((a, b) => a.apodo.localeCompare(b.apodo));
   }
@@ -890,8 +948,36 @@ export class FirestoreService {
     });
   }
 
-  async guardarExpediente(id: string, nroExpediente: string): Promise<void> {
+  /**
+   * Guarda el número de expediente en el caso y, si es la primera vez que se carga
+   * (el caso todavía no tenía nroExpediente), crea el expediente correspondiente
+   * en el módulo SRT, columna "Iniciados".
+   */
+  async guardarExpediente(id: string, nroExpediente: string, caso?: CasoModel): Promise<void> {
     await updateDoc(doc(this.db, COL_CASOS, id), { nroExpediente });
+
+    if (caso && !caso.nroExpediente) {
+      const hoy = new Date();
+      const fechaIngreso = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+      await this.crearExpedienteAbogado({
+        modulo: 'srt',
+        cuil: caso.CUIL ?? '',
+        nroExpediente,
+        llamador: caso.ASGINADO ?? caso.procesadoPor ?? '',
+        nombre: caso.Trabajador ?? '',
+        art: caso.ART ?? '',
+        accidente: caso.Tipo_Accidente ?? '',
+        localidad: caso.Localidad_Ocurrencia ?? '',
+        poder: false,
+        etapa: 'Judicial',
+        etapaArca: 'iniciados',
+        fechaAccidente: caso.Fecha_Accidente ?? '',
+        fechaIngreso,
+        fechaAcepto: caso.fechaAcepto ?? '',
+        certificadoMed: false, informeMed: false, certFirmas: false,
+        ratificacion: false, pagare: false, boleta: false,
+      });
+    }
   }
 
   async guardarSumarioCertero(id: string, sumario: object): Promise<void> {
@@ -1002,15 +1088,32 @@ export class FirestoreService {
 
   // ── Config por llamador ───────────────────────────────────
 
-  async getConfigLlamador(apodo: string): Promise<{ limitePendientes: number; perfil: string }> {
+  async getConfigLlamador(apodo: string): Promise<{ limitePendientes: number; perfil: string; limiteDiario: number; requiereDocs: boolean; requiereExpediente: boolean }> {
     const snap = await getDocs(
       query(collection(this.db, 'config_llamadores'), where('apodo', '==', apodo))
     );
     if (!snap.empty) {
       const data = snap.docs[0].data() as any;
-      return { limitePendientes: data.limitePendientes ?? 35, perfil: data.perfil ?? '' };
+      return {
+        limitePendientes: data.limitePendientes ?? 35,
+        perfil: data.perfil ?? '',
+        limiteDiario: data.limiteDiario ?? 0,
+        requiereDocs: data.requiereDocs ?? true,
+        requiereExpediente: data.requiereExpediente ?? false,
+      };
     }
-    return { limitePendientes: 35, perfil: '' };
+    return { limitePendientes: 35, perfil: '', limiteDiario: 0, requiereDocs: true, requiereExpediente: false };
+  }
+
+  async setLimiteDiarioLlamador(apodo: string, limiteDiario: number): Promise<void> {
+    const snap = await getDocs(
+      query(collection(this.db, 'config_llamadores'), where('apodo', '==', apodo))
+    );
+    if (!snap.empty) {
+      await updateDoc(snap.docs[0].ref, { limiteDiario });
+    } else {
+      await addDoc(collection(this.db, 'config_llamadores'), { apodo, limiteDiario, limitePendientes: 35 });
+    }
   }
 
   async setPerfilLlamador(apodo: string, perfil: string): Promise<void> {
@@ -1032,6 +1135,28 @@ export class FirestoreService {
       await updateDoc(snap.docs[0].ref, { limitePendientes });
     } else {
       await addDoc(collection(this.db, 'config_llamadores'), { apodo, limitePendientes });
+    }
+  }
+
+  async setRequiereDocsLlamador(apodo: string, requiereDocs: boolean): Promise<void> {
+    const snap = await getDocs(
+      query(collection(this.db, 'config_llamadores'), where('apodo', '==', apodo))
+    );
+    if (!snap.empty) {
+      await updateDoc(snap.docs[0].ref, { requiereDocs });
+    } else {
+      await addDoc(collection(this.db, 'config_llamadores'), { apodo, requiereDocs, limitePendientes: 35 });
+    }
+  }
+
+  async setRequiereExpedienteLlamador(apodo: string, requiereExpediente: boolean): Promise<void> {
+    const snap = await getDocs(
+      query(collection(this.db, 'config_llamadores'), where('apodo', '==', apodo))
+    );
+    if (!snap.empty) {
+      await updateDoc(snap.docs[0].ref, { requiereExpediente });
+    } else {
+      await addDoc(collection(this.db, 'config_llamadores'), { apodo, requiereExpediente, limitePendientes: 35 });
     }
   }
 
@@ -1350,5 +1475,162 @@ export class FirestoreService {
     }
 
     return Array.from(mapa.values()).sort((a, b) => b.consumidos - a.consumidos);
+  }
+
+  // ─── JOSEFINA ────────────────────────────────────────────────────────────
+  async guardarDocumentacionCaso(casoId: string, docs: {
+    anexoUrl: string;
+    dniUrls: string[];
+    altaMedicaUrl?: string;
+    cargadoPor: string;
+    cargadoEn: string;
+  }, telefono = ''): Promise<void> {
+    const update: any = { documentacion: docs };
+    if (telefono) update.telefonoContacto = telefono;
+    await updateDoc(doc(this.db, COL_CASOS, casoId), update);
+  }
+
+  async getCasosParaJosefina(): Promise<CasoModel[]> {
+    const [snap, configSnap] = await Promise.all([
+      getDocs(query(collection(this.db, COL_CASOS), where('estado', '==', 'acepto'))),
+      getDocs(collection(this.db, 'config_llamadores')),
+    ]);
+    const configMap = new Map<string, any>();
+    configSnap.docs.forEach(d => {
+      const data = d.data() as any;
+      if (data.apodo) configMap.set(String(data.apodo).toLowerCase(), data);
+    });
+
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as CasoModel))
+      .filter(c => {
+        const cfg = configMap.get((c.ASGINADO ?? '').toLowerCase()) ?? {};
+        const requiereDocs = cfg.requiereDocs ?? true;
+        const requiereExpediente = cfg.requiereExpediente ?? false;
+        if (requiereExpediente) return false; // el llamador carga su propio número de expediente
+        if (requiereDocs && !c.documentacion) return false; // esperar documentación
+        return true;
+      });
+  }
+
+  async guardarCasoExterno(data: {
+    tipo: string;
+    telefono: string;
+    dniUrl: string;
+    anexoUrl: string;
+    creadoPor: string;
+    creadoEmail: string;
+  }): Promise<void> {
+    await addDoc(collection(this.db, 'casos_externos'), {
+      ...data,
+      creadoEn: serverTimestamp(),
+    });
+  }
+
+  // ─── ARCA ────────────────────────────────────────────────────────────────
+  async getExpedientesArca(): Promise<Record<string, string>[]> {
+    const snap = await getDocs(collection(this.db, 'expedientesArca'));
+    return snap.docs.map(d => ({ docId: d.id, ...(d.data() as Record<string, string>) }));
+  }
+
+  // ─── CALENDARIO ──────────────────────────────────────────────────────────
+  async getCalEventos(email: string): Promise<Array<{ id: string; titulo: string; fecha: string; hora: string; tipo: string; expedienteNro: string; descripcion?: string }>> {
+    const snap = await getDocs(
+      query(collection(this.db, 'cal_eventos'), where('email', '==', email))
+    );
+    return snap.docs.map(d => {
+      const data = d.data() as any;
+      return { id: d.id, titulo: data.titulo, fecha: data.fecha, hora: data.hora ?? '', tipo: data.tipo, expedienteNro: data.expedienteNro ?? '', descripcion: data.descripcion };
+    });
+  }
+
+  async agregarCalEvento(email: string, evento: { titulo: string; fecha: string; hora: string; tipo: string; expedienteNro: string; descripcion?: string }): Promise<string> {
+    const ref = await addDoc(collection(this.db, 'cal_eventos'), {
+      ...evento,
+      email,
+      creadoEn: serverTimestamp(),
+    });
+    return ref.id;
+  }
+
+  async eliminarCalEvento(id: string): Promise<void> {
+    await deleteDoc(doc(this.db, 'cal_eventos', id));
+  }
+
+  // ─── EXPEDIENTES (abogado / SRT compartido) ──────────────────────────────
+
+  async getExpedientesAbogado(): Promise<Expediente[]> {
+    const snap = await getDocs(collection(this.db, COL_EXPEDIENTES));
+    if (snap.empty) {
+      await Promise.all(EXPEDIENTES_SEED.map(exp =>
+        addDoc(collection(this.db, COL_EXPEDIENTES), { ...exp, creadoEn: serverTimestamp() })
+      ));
+      const snap2 = await getDocs(collection(this.db, COL_EXPEDIENTES));
+      return snap2.docs
+        .map(d => ({ id: d.id, ...d.data() } as Expediente))
+        .sort((a: any, b: any) => (b.creadoEn?.seconds ?? 0) - (a.creadoEn?.seconds ?? 0));
+    }
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as Expediente))
+      .sort((a: any, b: any) => (b.creadoEn?.seconds ?? 0) - (a.creadoEn?.seconds ?? 0));
+  }
+
+  async crearExpedienteAbogado(exp: Omit<Expediente, 'id'>): Promise<string> {
+    const ref = await addDoc(collection(this.db, COL_EXPEDIENTES), { ...exp, creadoEn: serverTimestamp() });
+    return ref.id;
+  }
+
+  async actualizarExpedienteAbogado(id: string, data: Partial<Expediente>): Promise<void> {
+    await updateDoc(doc(this.db, COL_EXPEDIENTES, id), data as any);
+  }
+
+  async eliminarExpedienteAbogadoById(id: string): Promise<void> {
+    await deleteDoc(doc(this.db, COL_EXPEDIENTES, id));
+  }
+
+  // ─── MÓDULOS SRT / SISFE ─────────────────────────────────────────────────
+  async getExpedientesModulo(modulo: 'srt' | 'sisfe'): Promise<any[]> {
+    const snap = await getDocs(
+      query(collection(this.db, 'expedientes_modulo'), where('modulo', '==', modulo))
+    );
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a: any, b: any) => {
+        const ta = a.creadoEn?.seconds ?? 0;
+        const tb = b.creadoEn?.seconds ?? 0;
+        return tb - ta;
+      });
+  }
+
+  async agregarExpedienteModulo(data: {
+    modulo: string; nombre: string; nroArca: string;
+    etapa: string; notas?: string; creadoPor: string;
+  }): Promise<string> {
+    const ref = await addDoc(collection(this.db, 'expedientes_modulo'), {
+      ...data,
+      creadoEn: serverTimestamp(),
+      actualizadoEn: serverTimestamp(),
+    });
+    return ref.id;
+  }
+
+  async editarExpedienteModulo(id: string, data: {
+    nombre: string; nroArca: string; etapa: string; notas?: string;
+  }): Promise<void> {
+    await updateDoc(doc(this.db, 'expedientes_modulo', id), {
+      ...data,
+      actualizadoEn: serverTimestamp(),
+    });
+  }
+
+  async moverExpedienteModulo(id: string, etapa: string): Promise<void> {
+    await updateDoc(doc(this.db, 'expedientes_modulo', id), {
+      etapa,
+      actualizadoEn: serverTimestamp(),
+    });
+  }
+
+  async eliminarExpedienteModulo(id: string): Promise<void> {
+    await deleteDoc(doc(this.db, 'expedientes_modulo', id));
   }
 }

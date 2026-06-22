@@ -1,0 +1,19 @@
+@keyframes pronto-shake {
+  0%,  85%, 100% { transform: translateX(0); }
+  88%            { transform: translateX(-4px) rotate(-0.5deg); }
+  91%            { transform: translateX(4px)  rotate(0.5deg); }
+  94%            { transform: translateX(-3px); }
+  97%            { transform: translateX(3px); }
+}
+
+.pronto-urgente {
+  animation: pronto-shake 3s ease-in-out infinite;
+  border-color: #f87171 !important;
+  background-color: #fff5f5;
+  box-shadow: 0 0 0 1px #fca5a5, 0 2px 8px rgba(239,68,68,.15) !important;
+}
+
+.pronto-urgente:hover {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px #fca5a5, 0 4px 12px rgba(239,68,68,.2) !important;
+}

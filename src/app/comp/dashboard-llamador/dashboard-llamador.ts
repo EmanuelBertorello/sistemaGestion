@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { FirestoreService } from '../../services/firestore.service';
+import { StorageService, MAX_FILE_MB } from '../../services/storage.service';
 import { CerteroService, SumarioCertero } from '../../services/certero.service';
 import { AnexoService } from '../../services/anexo.service';
 import { CasoModel, EstadoCaso } from './caso.model';
@@ -19,9 +20,34 @@ import { NoticiaItem } from '../../services/firestore.service';
 export class DashboardLlamador implements OnInit, OnDestroy {
   estadoActivo: EstadoCaso = '';
   mostrarDescartarOpciones = false;
-  mostrarModalExpediente = false;
+  // Modal de documentación
+  mostrarModalDocs = false;
+  docAnexo: File | null = null;
+  docDni: File | null = null;
+  docAltaMedica: File | null = null;
+  docSecuela: File[] = [];           // fotos/PDFs de secuela (múltiples, opcional)
+  docTelefono = '';
+  docSubiendo = false;
+  docProgreso = 0;
+  docArchivoActual = '';
+  docError = '';
+  readonly DOC_MAX_MB = MAX_FILE_MB;
+
+  // Configuración por llamador (definida desde el dashboard de administrador)
+  requiereDocs = true;
+  requiereExpediente = false;
   expedienteInput = '';
-  expedienteError = '';
+
+  // Modal "Iniciar Caso Fuera del Sistema"
+  mostrarModalExterno = false;
+  extPaso: 1 | 2 = 1;
+  extTipo: 'enfermedad_profesional' | 'accidente_rechazado' | 'accidente_laboral' | '' = '';
+  extDni: File | null = null;
+  extAnexo: File | null = null;
+  extTelefono = '';
+  extSubiendo = false;
+  extProgreso = 0;
+  extError = '';
 
   // Modal comentario al cambiar estado
   mostrarModalComentario = false;
@@ -60,6 +86,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   perfilError = '';
 
   limitePendientes = 35; // se sobreescribe desde Firestore según el apodo
+  limiteDiario = 0;     // 0 = sin límite; se sobreescribe desde Firestore
 
   matriculas = [
     { label: 'DNI',                  archivo: 'assets/matriculas/dni.pdf' },
@@ -109,6 +136,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   constructor(
     public auth: AuthService,
     private firestoreService: FirestoreService,
+    private storageService: StorageService,
     private certero: CerteroService,
     private anexo: AnexoService,
     private router: Router,
@@ -129,10 +157,13 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       this.firestoreService.asegurarUsuarioRegistrado(uid, email);
       this.apodoUsuario = await this.firestoreService.getApodoPorEmail(email);
 
-      // Cargar config personal (límite de pendientes, perfil, etc.)
+      // Cargar config personal (límite de pendientes, perfil, límite diario)
       const config = await this.firestoreService.getConfigLlamador(this.apodoUsuario);
       this.limitePendientes = config.limitePendientes;
-      this.perfilLlamador = config.perfil ?? '';
+      this.perfilLlamador  = config.perfil ?? '';
+      this.limiteDiario    = config.limiteDiario ?? 0;
+      this.requiereDocs       = config.requiereDocs ?? true;
+      this.requiereExpediente = config.requiereExpediente ?? false;
 
       // Registrar presencia y mantener heartbeat cada 30s
       await this.firestoreService.registrarPresencia(email, this.apodoUsuario);
@@ -167,6 +198,11 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   get pendientesCount(): number { return this.pendientes.length; }
 
   get limitePendientesAlcanzado(): boolean { return false; }
+
+  /** true cuando el llamador superó su límite diario de contactos */
+  get limiteDiarioAlcanzado(): boolean {
+    return this.limiteDiario > 0 && this.contactosHoy >= this.limiteDiario;
+  }
 
   get aceptos(): CasoModel[] {
     return this.historial.filter(c => c.estado === 'acepto');
@@ -370,55 +406,247 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     return colores[estado] || 'bg-gray-100 text-gray-700';
   }
 
+  private _resetDocModal(): void {
+    this.docAnexo = null;
+    this.docDni = null;
+    this.docAltaMedica = null;
+    this.docSecuela = [];
+    this.docTelefono = '';
+    this.docError = '';
+    this.docProgreso = 0;
+    this.docArchivoActual = '';
+    this.expedienteInput = '';
+  }
+
+  /** true si hay que mostrar el modal de "Caso Aceptado" (pide PDFs y/o número de expediente) */
+  get requiereModalAcepto(): boolean {
+    return this.requiereDocs || this.requiereExpediente;
+  }
+
+  /** true si todavía faltan datos obligatorios para confirmar el modal de "Caso Aceptado" */
+  get confirmarDocsDisabled(): boolean {
+    if (this.docSubiendo) return true;
+    if (this.requiereDocs && (!this.docAnexo || !this.docDni)) return true;
+    if (this.requiereExpediente && !this.expedienteInput.trim()) return true;
+    return false;
+  }
+
   setEstado(estado: EstadoCaso): void {
     if (estado === 'acepto') {
-      this.expedienteInput = '';
-      this.expedienteError = '';
-      this.mostrarModalExpediente = true;
+      if (!this.requiereModalAcepto) {
+        this.estadoActivo = 'acepto';
+        this.mostrarDescartarOpciones = false;
+        return;
+      }
+      this._resetDocModal();
+      this.mostrarModalDocs = true;
       return;
     }
     if (estado === 'pendiente') {
-      this.abrirModalSeguimiento(null); // null = caso actual
+      this.abrirModalSeguimiento(null);
       return;
     }
     this.estadoActivo = estado;
     this.mostrarDescartarOpciones = false;
   }
 
-  confirmarExpediente(): void {
-    if (!this.expedienteInput.trim()) {
-      this.expedienteError = 'El número de expediente es obligatorio.';
+  setDocFile(event: Event, campo: 'anexo' | 'dni' | 'altaMedica'): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    this.docError = '';
+    if (file) {
+      const esPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      if (!esPdf) { this.docError = `"${file.name}" no es un PDF válido.`; input.value = ''; return; }
+      if (file.size > this.DOC_MAX_MB * 1024 * 1024) { this.docError = `"${file.name}" supera el límite de ${this.DOC_MAX_MB} MB.`; input.value = ''; return; }
+    }
+    if (campo === 'anexo')      this.docAnexo      = file;
+    if (campo === 'dni')        this.docDni        = file;
+    if (campo === 'altaMedica') this.docAltaMedica = file;
+  }
+
+  addSecuelaFiles(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const nuevos = Array.from(input.files ?? []);
+    this.docError = '';
+    const MAX = this.DOC_MAX_MB * 1024 * 1024;
+    for (const f of nuevos) {
+      const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
+      const valido = ['pdf','jpg','jpeg','png','webp'].includes(ext);
+      if (!valido) { this.docError = `"${f.name}" debe ser PDF, JPG o PNG.`; input.value = ''; return; }
+      if (f.size > MAX) { this.docError = `"${f.name}" supera el límite de ${this.DOC_MAX_MB} MB.`; input.value = ''; return; }
+    }
+    this.docSecuela = [...this.docSecuela, ...nuevos];
+    input.value = '';
+  }
+
+  removeSecuela(i: number): void {
+    this.docSecuela = this.docSecuela.filter((_, idx) => idx !== i);
+  }
+
+  abrirModalExterno() {
+    this.mostrarModalExterno = true;
+    this.extPaso = 1;
+    this.extTipo = '';
+    this.extDni = null;
+    this.extAnexo = null;
+    this.extTelefono = '';
+    this.extError = '';
+    this.extProgreso = 0;
+  }
+
+  cancelarExterno() { this.mostrarModalExterno = false; }
+
+  seleccionarTipoExterno(tipo: 'enfermedad_profesional' | 'accidente_rechazado' | 'accidente_laboral') {
+    this.extTipo = tipo;
+    this.extPaso = 2;
+    this.extError = '';
+  }
+
+  setExtFile(event: Event, campo: 'dni' | 'anexo'): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (file && file.type !== 'application/pdf') {
+      this.extError = 'Solo se aceptan archivos PDF.';
+      input.value = '';
       return;
     }
-    this.mostrarModalExpediente = false;
+    this.extError = '';
+    if (campo === 'dni')   this.extDni   = file;
+    if (campo === 'anexo') this.extAnexo = file;
+  }
 
-    if (this.pendingCambioEstado) {
-      // Viene del historial: guardar expediente y abrir modal de comentario
-      const { caso } = this.pendingCambioEstado;
-      if (caso.id) {
-        this.firestoreService.guardarExpediente(caso.id, this.expedienteInput.trim());
-        const idx = this.historial.findIndex(c => c.id === caso.id);
-        if (idx >= 0) this.historial[idx] = { ...this.historial[idx], nroExpediente: this.expedienteInput.trim() };
-      }
-      this.comentarioInput = '';
-      this.mostrarModalComentario = true;
-    } else {
-      // Viene del caso actual
-      this.estadoActivo = 'acepto';
-      this.mostrarDescartarOpciones = false;
-      if (this.caso?.id) {
-        this.firestoreService.guardarExpediente(this.caso.id, this.expedienteInput.trim());
-        this.caso = { ...this.caso, nroExpediente: this.expedienteInput.trim() };
-      }
+  async confirmarExterno(): Promise<void> {
+    if (!this.extDni)             { this.extError = 'El DNI (PDF) es obligatorio.'; return; }
+    if (!this.extAnexo)           { this.extError = 'El Anexo (PDF) es obligatorio.'; return; }
+    if (!this.extTelefono.trim()) { this.extError = 'El número de teléfono es obligatorio.'; return; }
+
+    this.extSubiendo = true;
+    this.extError = '';
+    try {
+      const id = Date.now().toString();
+      const dniUrl   = await this.storageService.uploadFile(`casos_externos/${id}/dni.pdf`,   this.extDni!,   p => { this.extProgreso = Math.round(p / 2); this.cdr.detectChanges(); });
+      const anexoUrl = await this.storageService.uploadFile(`casos_externos/${id}/anexo.pdf`, this.extAnexo!, p => { this.extProgreso = 50 + Math.round(p / 2); this.cdr.detectChanges(); });
+      await this.firestoreService.guardarCasoExterno({
+        tipo: this.extTipo,
+        telefono: this.extTelefono.trim(),
+        dniUrl,
+        anexoUrl,
+        creadoPor: this.apodoUsuario,
+        creadoEmail: this.auth.getCurrentEmail(),
+      });
+      this.mostrarModalExterno = false;
+    } catch (e: any) {
+      this.extError = 'Error al subir: ' + (e.message ?? 'Intentá de nuevo.');
+    } finally {
+      this.extSubiendo = false;
+      this.cdr.detectChanges();
     }
   }
 
-  cancelarExpediente(): void {
-    this.mostrarModalExpediente = false;
-    this.expedienteInput = '';
-    this.expedienteError = '';
+  async confirmarDocs(): Promise<void> {
+    if (this.requiereDocs) {
+      if (!this.docAnexo) { this.docError = 'El anexo (PDF) es obligatorio.'; return; }
+      if (!this.docDni)   { this.docError = 'El DNI frente (PDF) es obligatorio.'; return; }
+    }
+    if (this.requiereExpediente && !this.expedienteInput.trim()) {
+      this.docError = 'El número de expediente es obligatorio.';
+      return;
+    }
+
+    const casoActivo = this.pendingCambioEstado?.caso ?? this.caso;
+    const casoId = casoActivo?.id;
+    if (!casoId) { this.docError = 'No hay caso activo. Recargá la página.'; return; }
+
+    this.docSubiendo = true;
+    this.docError = '';
+    this.docProgreso = 0;
+    this.docArchivoActual = this.requiereDocs ? 'Preparando archivos...' : '';
+    this.cdr.detectChanges();
+
+    try {
+      let docs: any = undefined;
+      if (this.requiereDocs) {
+        docs = await this.storageService.subirDocumentacion(
+          casoId,
+          {
+            anexo: this.docAnexo!,
+            dni:   this.docDni!,
+            ...(this.docAltaMedica             ? { altaMedica: this.docAltaMedica } : {}),
+            ...(this.docSecuela.length > 0     ? { secuela:    this.docSecuela    } : {}),
+          },
+          this.apodoUsuario,
+          pct => {
+            this.docProgreso = pct;
+            const total = 2 + (this.docAltaMedica ? 1 : 0) + this.docSecuela.length;
+            const names = ['Anexo', 'DNI', ...(this.docAltaMedica ? ['Alta Médica'] : []), ...this.docSecuela.map((f, i) => `Secuela ${i + 1}`)];
+            const fileIdx = Math.min(Math.floor(pct / (100 / total)), names.length - 1);
+            this.docArchivoActual = `Subiendo ${names[fileIdx]}...`;
+            this.cdr.detectChanges();
+          }
+        );
+
+        // Solo guarda en Firestore si TODOS los archivos subieron OK
+        await this.firestoreService.guardarDocumentacionCaso(casoId, docs, this.docTelefono.trim());
+      }
+
+      if (this.requiereExpediente) {
+        await this.firestoreService.guardarExpediente(casoId, this.expedienteInput.trim(), casoActivo);
+      }
+
+      this.mostrarModalDocs = false;
+
+      if (this.pendingCambioEstado) {
+        // Caso del historial → abrir modal de comentario para confirmar
+        this.comentarioInput = '';
+        this.mostrarModalComentario = true;
+      } else {
+        // Caso actual: marcar como acepto en Firestore YA (sin esperar "Siguiente caso")
+        // así Josefina lo ve inmediatamente
+        await this.firestoreService.marcarProcesado(
+          casoId,
+          'acepto',
+          this.auth.getCurrentEmail().trim(),
+          this.apodoUsuario.trim(),
+          this.caso,
+          ''
+        );
+        this.estadoActivo = 'acepto';
+        this.mostrarDescartarOpciones = false;
+        if (this.caso) {
+          this.caso = {
+            ...this.caso,
+            procesado: true,
+            estado: 'acepto',
+            ...(docs ? { documentacion: docs } : {}),
+            ...(this.requiereExpediente ? { nroExpediente: this.expedienteInput.trim() } : {}),
+          };
+        }
+      }
+    } catch (e: any) {
+      const msg: string = e?.message ?? String(e);
+      if (msg.includes('storage/unauthorized') || msg.includes('permission-denied')) {
+        this.docError = 'Sin permisos para subir archivos. Contactá al administrador.';
+      } else if (msg.includes('storage/canceled')) {
+        this.docError = 'Subida cancelada.';
+      } else if (msg.includes('network') || msg.includes('fetch')) {
+        this.docError = 'Error de red. Verificá tu conexión e intentá de nuevo.';
+      } else {
+        this.docError = 'Error al subir: ' + msg;
+      }
+    } finally {
+      this.docSubiendo = false;
+      this.docArchivoActual = '';
+      this.cdr.detectChanges();
+    }
+  }
+
+  cancelarDocs(): void {
+    this._resetDocModal();
+    this.mostrarModalDocs = false;
     if (this.pendingCambioEstado) {
-      // Vino del historial: resetear el select visualmente
+      const { caso } = this.pendingCambioEstado;
+      const idx = this.historial.findIndex(c => c.id === caso.id);
+      if (idx >= 0) this.historial[idx] = { ...this.historial[idx] }; // fuerza re-render del select
       this.pendingCambioEstado = null;
       this.historial = [...this.historial];
       this.cdr.detectChanges();
@@ -467,7 +695,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     if (!cel) return;
     const tel = (cel.codigoArea + cel.numero).replace(/\D/g, '');
     const nombre = encodeURIComponent(`Hola ${caso.Trabajador || ''}`);
-    window.open(`https://web.whatsapp.com/send?phone=54${tel}&text=${nombre}`, 'wa_llamador')?.focus();
+    window.open(`https://wa.me/54${tel}?text=${nombre}`, '_blank');
   }
 
   ultimoComentario(caso: CasoModel): string {
@@ -652,12 +880,15 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   iniciarCambioEstado(caso: CasoModel, nuevoEstado: EstadoCaso): void {
     if (!caso.id || !nuevoEstado) return;
 
-    // Acepto: pedir expediente primero
+    // Acepto: pedir documentación y/o número de expediente, si corresponde
     if (nuevoEstado === 'acepto') {
+      if (!this.requiereModalAcepto) {
+        this.cambiarEstadoCaso(caso, nuevoEstado, '');
+        return;
+      }
       this.pendingCambioEstado = { caso, estado: nuevoEstado };
-      this.expedienteInput = '';
-      this.expedienteError = '';
-      this.mostrarModalExpediente = true;
+      this._resetDocModal();
+      this.mostrarModalDocs = true;
       return;
     }
 
@@ -764,13 +995,13 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   abrirWaNumero(codigoArea: string, numero: string, nombre?: string): void {
     const tel = (codigoArea + numero).replace(/\D/g, '');
     const txt = encodeURIComponent(`Hola ${nombre || ''}`);
-    window.open(`https://web.whatsapp.com/send?phone=54${tel}&text=${txt}`, 'wa_llamador')?.focus();
+    window.open(`https://wa.me/54${tel}?text=${txt}`, '_blank');
   }
 
   abrirWhatsappVinculo(documento: string, nombre?: string): void {
     const telefono = documento.replace(/\D/g, '');
     const txt = encodeURIComponent(`Hola ${nombre || ''}`);
-    window.open(`https://web.whatsapp.com/send?phone=54${telefono}&text=${txt}`, 'wa_llamador')?.focus();
+    window.open(`https://wa.me/54${telefono}?text=${txt}`, '_blank');
   }
 
   async reintentar(): Promise<void> {
@@ -783,16 +1014,24 @@ export class DashboardLlamador implements OnInit, OnDestroy {
 
   async solicitarDatoNuevo(): Promise<void> {
     if (this.buscando || !this.caso || !this.estadoActivo || this.limitePendientesAlcanzado) return;
+    // Recargar límite desde Firestore en cada intento — efecto inmediato sin recargar página
+    const cfg = await this.firestoreService.getConfigLlamador(this.apodoUsuario);
+    this.limiteDiario = cfg.limiteDiario ?? 0;
+    if (this.limiteDiarioAlcanzado) { this.cdr.detectChanges(); return; }
 
     if (this.caso.id) {
-      await this.firestoreService.marcarProcesado(
-        this.caso.id,
-        this.estadoActivo,
-        this.auth.getCurrentEmail().trim(),
-        this.apodoUsuario.trim(),
-        this.caso,
-        this.comentarioCasoActual
-      );
+      // Si ya fue procesado (ej: acepto marcado al subir docs), no llamar de nuevo
+      // para evitar duplicar notificaciones y estadísticas
+      if (!this.caso.procesado) {
+        await this.firestoreService.marcarProcesado(
+          this.caso.id,
+          this.estadoActivo,
+          this.auth.getCurrentEmail().trim(),
+          this.apodoUsuario.trim(),
+          this.caso,
+          this.comentarioCasoActual
+        );
+      }
       this.historial = [{ ...this.caso, estado: this.estadoActivo, procesado: true }, ...this.historial];
       this.comentarioCasoActual = '';
     }

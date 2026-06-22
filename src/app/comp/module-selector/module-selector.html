@@ -1,0 +1,67 @@
+<div class="min-h-screen flex flex-col" style="background:#f0f0f0">
+
+  <!-- Topbar estilo Odoo -->
+  <header class="h-11 bg-white border-b border-gray-200 flex items-center px-5 shrink-0" style="box-shadow:0 1px 3px rgba(0,0,0,.06)">
+    <div class="flex items-center gap-2">
+      <div class="w-7 h-7 rounded bg-[#875A7B] flex items-center justify-center text-white text-xs font-black">C</div>
+      <span class="text-sm font-bold text-gray-700 tracking-tight">Sistema de Gestión</span>
+    </div>
+    <div class="ml-auto flex items-center gap-4">
+      @if (!cargando && !error) {
+        <span class="text-sm text-gray-500 font-medium">{{ apodo }}</span>
+      }
+      <button (click)="cerrarSesion()" class="text-xs text-gray-400 hover:text-red-500 transition font-medium">Salir</button>
+    </div>
+  </header>
+
+  <!-- Cuerpo -->
+  <div class="flex-1 flex flex-col items-center justify-start pt-14 px-8 pb-16">
+
+    @if (cargando) {
+      <div class="flex flex-col items-center gap-3 mt-24">
+        <div class="w-8 h-8 border-[3px] border-[#875A7B] border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-sm text-gray-400">Cargando...</p>
+      </div>
+    }
+
+    @if (error) {
+      <div class="bg-white rounded-2xl shadow p-8 max-w-sm w-full text-center mt-10">
+        <p class="text-sm font-semibold text-red-500 mb-1">Error al cargar</p>
+        <p class="text-xs text-gray-400 break-all">{{ error }}</p>
+        <button (click)="cerrarSesion()" class="mt-4 text-xs text-gray-400 hover:text-red-500 underline">Cerrar sesión</button>
+      </div>
+    }
+
+    @if (!cargando && !error) {
+
+      <!-- Grid de apps estilo Odoo -->
+      <div class="flex flex-wrap justify-center gap-2" style="max-width:740px">
+
+        @for (m of modulos; track m.key) {
+          <button (click)="seleccionar(m)"
+            class="group flex flex-col items-center gap-2.5 bg-white rounded-xl border border-gray-100 transition-all duration-150 hover:shadow-md hover:border-gray-200 focus:outline-none"
+            style="width:130px; height:130px; padding:20px 12px 14px; box-shadow:0 1px 3px rgba(0,0,0,.07)">
+
+            <!-- Ícono con gradiente y letra -->
+            <div class="w-[56px] h-[56px] rounded-2xl flex items-center justify-center transition-transform duration-150 group-hover:scale-105 shrink-0"
+              [style.background]="getGradient(m.key)">
+              <span class="text-white font-black text-xl select-none" style="text-shadow:0 1px 3px rgba(0,0,0,.2)">
+                {{ m.letra }}
+              </span>
+            </div>
+
+            <!-- Nombre del módulo -->
+            <span class="text-[13px] font-semibold text-gray-700 text-center leading-tight group-hover:text-gray-900 transition-colors w-full">
+              {{ m.label }}
+            </span>
+
+          </button>
+        }
+
+      </div>
+
+    }
+
+  </div>
+
+</div>

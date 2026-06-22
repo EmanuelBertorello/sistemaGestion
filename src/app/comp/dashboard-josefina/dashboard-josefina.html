@@ -1,0 +1,761 @@
+<div class="min-h-screen bg-gray-50 flex flex-col">
+
+  <!-- Topbar -->
+  <header class="bg-[#0C1A35] text-white px-6 h-12 flex items-center gap-4 shadow-lg shrink-0">
+    <button (click)="router.navigate(['/modulos'])" class="flex items-center gap-1 text-white/40 hover:text-white transition text-xs shrink-0">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      Módulos
+    </button>
+    <div class="flex items-center gap-2 pr-4 border-l border-r border-white/10 pl-4">
+      <div class="w-6 h-6 rounded bg-emerald-500 flex items-center justify-center text-xs font-black">J</div>
+      <span class="text-sm font-bold tracking-tight">Iniciadora de Expedientes</span>
+    </div>
+    <div class="flex items-center gap-2 text-xs text-gray-300">
+      <span class="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-semibold">{{ pendientes }} pendientes</span>
+      <span class="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-semibold">{{ iniciados }} iniciados</span>
+    </div>
+    <div class="ml-auto">
+      <button (click)="cerrarSesion()" class="text-xs text-gray-400 hover:text-red-400 transition px-2 py-1 rounded hover:bg-white/10">
+        Salir
+      </button>
+    </div>
+  </header>
+
+  <!-- Nav tabs -->
+  <div class="bg-white border-b border-gray-100 px-6 flex items-center gap-1 shrink-0">
+    <button (click)="seccion = 'casos'"
+      class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-emerald-500]="seccion === 'casos'"
+      [class.text-emerald-700]="seccion === 'casos'"
+      [class.border-transparent]="seccion !== 'casos'"
+      [class.text-gray-500]="seccion !== 'casos'"
+      [class.hover:text-gray-700]="seccion !== 'casos'">
+      Casos
+    </button>
+    <button (click)="seccion = 'expedientes'"
+      class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-emerald-500]="seccion === 'expedientes'"
+      [class.text-emerald-700]="seccion === 'expedientes'"
+      [class.border-transparent]="seccion !== 'expedientes'"
+      [class.text-gray-500]="seccion !== 'expedientes'"
+      [class.hover:text-gray-700]="seccion !== 'expedientes'">
+      Expedientes
+      <span class="ml-1 text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-bold">{{ expedientes.length }}</span>
+    </button>
+    <button (click)="seccion = 'calculadoras'"
+      class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-emerald-500]="seccion === 'calculadoras'"
+      [class.text-emerald-700]="seccion === 'calculadoras'"
+      [class.border-transparent]="seccion !== 'calculadoras'"
+      [class.text-gray-500]="seccion !== 'calculadoras'"
+      [class.hover:text-gray-700]="seccion !== 'calculadoras'">
+      Calculadoras
+    </button>
+    <button (click)="seccion = 'agenda'"
+      class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-emerald-500]="seccion === 'agenda'"
+      [class.text-emerald-700]="seccion === 'agenda'"
+      [class.border-transparent]="seccion !== 'agenda'"
+      [class.text-gray-500]="seccion !== 'agenda'"
+      [class.hover:text-gray-700]="seccion !== 'agenda'">
+      Agenda
+    </button>
+    <button (click)="seccion = 'llamadoras'; cargarLlamadoras()"
+      class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-emerald-500]="seccion === 'llamadoras'"
+      [class.text-emerald-700]="seccion === 'llamadoras'"
+      [class.border-transparent]="seccion !== 'llamadoras'"
+      [class.text-gray-500]="seccion !== 'llamadoras'"
+      [class.hover:text-gray-700]="seccion !== 'llamadoras'">
+      Llamadoras
+    </button>
+  </div>
+
+  <!-- ── CASOS ───────────────────────────────────────────────────────────── -->
+  @if (seccion === 'casos') {
+
+    <!-- Sub-toolbar -->
+    <div class="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-3">
+      <h2 class="text-sm font-bold text-gray-800">Casos para iniciar expediente</h2>
+      <input [(ngModel)]="busqueda" placeholder="Buscar por nombre, CUIL, ART..."
+        class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-emerald-300 ml-2" />
+      <span class="text-xs text-gray-400">{{ casosFiltrados.length }} caso(s)</span>
+    </div>
+
+    <!-- Body -->
+    <div class="flex-1 overflow-auto px-6 py-4">
+
+      @if (cargando) {
+        <div class="flex flex-col items-center justify-center py-24 gap-3">
+          <div class="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-sm text-gray-500">Cargando casos...</p>
+        </div>
+      } @else if (casosFiltrados.length === 0) {
+        <div class="text-center py-24 text-gray-400 text-sm">
+          @if (busqueda) { Sin resultados para "{{ busqueda }}" }
+          @else { No hay casos pendientes de iniciación. }
+        </div>
+      } @else {
+        <div class="flex flex-col gap-2">
+          @for (caso of casosFiltrados; track caso.id) {
+            <div class="bg-white rounded-xl border shadow-sm hover:shadow-md transition-all"
+              [class.border-emerald-200]="caso.nroExpediente"
+              [class.border-amber-200]="!caso.nroExpediente">
+
+              <div class="flex items-start gap-4 px-5 py-4">
+
+                <!-- Estado pill -->
+                <div class="shrink-0 mt-0.5">
+                  @if (caso.nroExpediente) {
+                    <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Iniciado</span>
+                  } @else {
+                    <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pendiente</span>
+                  }
+                </div>
+
+                <!-- Info del caso -->
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <p class="text-sm font-bold text-gray-800">{{ caso.Trabajador || '—' }}</p>
+                    <span class="text-xs text-gray-400 font-mono">{{ caso.CUIL }}</span>
+                    @if (caso.ART) {
+                      <span class="text-[11px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{{ caso.ART }}</span>
+                    }
+                    @if (caso.ASGINADO) {
+                      <span class="text-[11px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">por {{ caso.ASGINADO }}</span>
+                    }
+                    @if (telefonoDe(caso); as tel) {
+                      <a [href]="'tel:' + tel" target="_blank"
+                        class="text-[11px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1 hover:bg-green-100 transition"
+                        (click)="$event.stopPropagation()">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                        </svg>
+                        {{ tel }}
+                      </a>
+                    }
+                  </div>
+                  <p class="text-xs text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                    @if (caso.Tipo_Accidente) { <span>{{ caso.Tipo_Accidente }}</span> }
+                    @if (caso.Localidad_Ocurrencia) { <span class="text-gray-300">·</span><span>{{ caso.Localidad_Ocurrencia }}</span> }
+                    @if (caso.Fecha_Accidente) { <span class="text-gray-300">·</span><span>Acc. {{ caso.Fecha_Accidente }}</span> }
+                  </p>
+                  @if (caso.nroExpediente) {
+                    <p class="text-xs font-mono text-emerald-600 mt-1 font-semibold">Exp. {{ caso.nroExpediente }}</p>
+                  }
+
+                  <!-- Documentación adjunta -->
+                  <div class="flex items-center gap-2 mt-2 flex-wrap">
+                    @if (caso.documentacion?.anexoUrl) {
+                      <a [href]="caso.documentacion!.anexoUrl" target="_blank"
+                        class="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                          <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        Anexo
+                      </a>
+                    }
+                    @if (caso.documentacion?.dniUrls?.[0]) {
+                      <a [href]="caso.documentacion!.dniUrls[0]" target="_blank"
+                        class="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="3" y="5" width="18" height="14" rx="2"/>
+                        </svg>
+                        DNI
+                      </a>
+                    }
+                    @if (caso.documentacion?.altaMedicaUrl) {
+                      <a [href]="caso.documentacion!.altaMedicaUrl" target="_blank"
+                        class="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M9 12h6M12 9v6"/><circle cx="12" cy="12" r="9"/>
+                        </svg>
+                        Alta Médica
+                      </a>
+                    }
+                    <span class="text-[10px] text-gray-300 ml-auto">Cargado por {{ caso.documentacion?.cargadoPor }}</span>
+                  </div>
+                </div>
+
+                <!-- Botón acción -->
+                <div class="shrink-0">
+                  <button (click)="abrirModal(caso)"
+                    class="text-xs font-semibold px-4 py-2 rounded-xl transition"
+                    [class.bg-amber-500]="!caso.nroExpediente"
+                    [class.hover:bg-amber-600]="!caso.nroExpediente"
+                    [class.text-white]="!caso.nroExpediente"
+                    [class.bg-gray-100]="caso.nroExpediente"
+                    [class.hover:bg-gray-200]="caso.nroExpediente"
+                    [class.text-gray-600]="caso.nroExpediente">
+                    {{ caso.nroExpediente ? 'Editar exp.' : 'Iniciar expediente' }}
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+  }
+
+  <!-- ── EXPEDIENTES ───────────────────────────────────────────────────── -->
+  @if (seccion === 'expedientes') {
+
+    <!-- Sub-toolbar -->
+    <div class="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-3 shrink-0">
+      <h2 class="text-sm font-bold text-gray-800">Expedientes</h2>
+      <input [(ngModel)]="busquedaExp" placeholder="Buscar por nombre, CUIL, ART..."
+        class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-emerald-300 ml-2" />
+      <span class="text-xs text-gray-400">{{ expedientesFiltrados.length }} expediente(s)</span>
+    </div>
+
+    <div class="flex-1 overflow-auto px-6 py-4">
+      @if (expedientesFiltrados.length === 0) {
+        <div class="text-center py-24 text-gray-400 text-sm">
+          @if (busquedaExp) { Sin resultados para "{{ busquedaExp }}" }
+          @else { No hay expedientes cargados. }
+        </div>
+      } @else {
+        <div class="flex flex-col gap-2">
+          @for (exp of expedientesFiltrados; track exp.id) {
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all px-5 py-4 flex items-center gap-4">
+
+              <!-- Etapa badge -->
+              <div class="shrink-0">
+                <span class="text-[11px] font-bold px-2 py-0.5 rounded-full" [class]="etapaArcaPill(exp.etapaArca)">
+                  {{ etapaArcaLabel(exp.etapaArca) }}
+                </span>
+              </div>
+
+              <!-- Info -->
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <p class="text-sm font-bold text-gray-800">{{ exp.nombre }}</p>
+                  <span class="text-xs text-gray-400 font-mono">{{ exp.cuil }}</span>
+                  @if (exp.art) {
+                    <span class="text-[11px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{{ exp.art }}</span>
+                  }
+                  @if (exp.llamador) {
+                    <span class="text-[11px] bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full">
+                      {{ exp.llamador.includes('@') ? exp.llamador.split('@')[0] : exp.llamador }}
+                    </span>
+                  }
+                </div>
+                <div class="flex items-center gap-3 mt-0.5 flex-wrap">
+                  @if (exp.nroExpediente) {
+                    <span class="text-xs font-mono text-emerald-600 font-semibold">Exp. {{ exp.nroExpediente }}</span>
+                  } @else {
+                    <span class="text-xs text-amber-500 font-semibold">Sin número</span>
+                  }
+                  @if (exp.localidad) {
+                    <span class="text-xs text-gray-400">{{ exp.localidad }}</span>
+                  }
+                  @if (exp.notas) {
+                    <span class="text-xs text-gray-400 italic">{{ exp.notas }}</span>
+                  }
+                </div>
+              </div>
+
+              <!-- Etapa legal -->
+              <div class="shrink-0 text-right">
+                <span class="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{{ exp.etapa }}</span>
+              </div>
+
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+  }
+
+  <!-- ── CALCULADORAS ──────────────────────────────────────────────────── -->
+  @if (seccion === 'calculadoras') {
+    <app-calculadora-art class="flex-1 flex flex-col overflow-hidden" />
+  }
+
+  <!-- ── AGENDA ──────────────────────────────────────────────────────────── -->
+  @if (seccion === 'agenda') {
+    <div class="flex-1 overflow-hidden flex flex-col bg-[#f5f6fa]">
+
+      <!-- Sub-toolbar -->
+      <div class="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-3 shrink-0">
+        <button (click)="irMesPrev()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition text-gray-600">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <h2 class="text-sm font-bold text-gray-900 w-44 text-center">{{ calNombreMes }}</h2>
+        <button (click)="irMesSig()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition text-gray-600">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button (click)="irHoy()" class="text-xs font-semibold text-emerald-600 hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition border border-emerald-200">
+          Hoy
+        </button>
+        <div class="flex-1"></div>
+        <button (click)="abrirModalEvento()"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nuevo evento
+        </button>
+      </div>
+
+      <div class="flex flex-1 overflow-hidden gap-0">
+
+        <!-- ── Grid calendario ──────────────────────────────────────────── -->
+        <div class="flex-1 overflow-auto p-4">
+          <!-- Cabecera días semana -->
+          <div class="grid grid-cols-7 mb-1">
+            @for (dia of CAL_DIAS; track dia) {
+              <div class="text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider py-1">{{ dia }}</div>
+            }
+          </div>
+
+          <!-- Celdas -->
+          <div class="grid grid-cols-7 gap-1">
+            @for (celda of calCeldas; track celda.fecha) {
+              <div (click)="calDiaSeleccionado = celda.fecha"
+                class="min-h-[82px] rounded-lg p-1.5 cursor-pointer border transition-all"
+                [class.bg-white]="celda.esActual && calDiaSeleccionado !== celda.fecha"
+                [class.border-gray-200]="celda.esActual && calDiaSeleccionado !== celda.fecha && !celda.esHoy"
+                [class.bg-gray-50]="!celda.esActual"
+                [class.border-transparent]="!celda.esActual || celda.esHoy"
+                [class.border-emerald-400]="calDiaSeleccionado === celda.fecha"
+                [class.bg-emerald-50]="calDiaSeleccionado === celda.fecha"
+                [class.ring-1]="calDiaSeleccionado === celda.fecha"
+                [class.ring-emerald-300]="calDiaSeleccionado === celda.fecha"
+                [class.border-blue-300]="celda.esHoy && calDiaSeleccionado !== celda.fecha"
+                [class.bg-blue-50]="celda.esHoy && calDiaSeleccionado !== celda.fecha">
+
+                <!-- Número del día -->
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs font-bold leading-none"
+                    [class.text-gray-800]="celda.esActual && !celda.esHoy"
+                    [class.text-gray-300]="!celda.esActual"
+                    [class.text-white]="celda.esHoy"
+                    [class.bg-emerald-600]="celda.esHoy"
+                    [class.rounded-full]="celda.esHoy"
+                    [class.w-5]="celda.esHoy"
+                    [class.h-5]="celda.esHoy"
+                    [class.flex]="celda.esHoy"
+                    [class.items-center]="celda.esHoy"
+                    [class.justify-center]="celda.esHoy">
+                    {{ celda.dia }}
+                  </span>
+                  @if (celda.eventos.length > 0) {
+                    <span class="text-[9px] text-gray-400">{{ celda.eventos.length }}</span>
+                  }
+                </div>
+
+                <!-- Eventos del día -->
+                @for (ev of celda.eventos.slice(0, 3); track ev.id) {
+                  <div class="flex items-center gap-1 mb-0.5 rounded px-1 py-0.5"
+                    [class.bg-rose-100]="ev.tipo === 'audiencia'"
+                    [class.bg-amber-100]="ev.tipo === 'vencimiento'"
+                    [class.bg-blue-100]="ev.tipo === 'cita'"
+                    [class.bg-gray-100]="ev.tipo === 'otro'">
+                    <div class="w-1 h-1 rounded-full shrink-0"
+                      [class.bg-rose-500]="ev.tipo === 'audiencia'"
+                      [class.bg-amber-500]="ev.tipo === 'vencimiento'"
+                      [class.bg-blue-500]="ev.tipo === 'cita'"
+                      [class.bg-gray-400]="ev.tipo === 'otro'"></div>
+                    <span class="text-[10px] leading-tight truncate"
+                      [class.text-rose-700]="ev.tipo === 'audiencia'"
+                      [class.text-amber-700]="ev.tipo === 'vencimiento'"
+                      [class.text-blue-700]="ev.tipo === 'cita'"
+                      [class.text-gray-600]="ev.tipo === 'otro'">{{ ev.titulo }}</span>
+                  </div>
+                }
+                @if (celda.eventos.length > 3) {
+                  <p class="text-[9px] text-gray-400 pl-1">+{{ celda.eventos.length - 3 }} más</p>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- ── Panel lateral derecho ──────────────────────────────────── -->
+        <div class="w-72 shrink-0 bg-white border-l border-gray-100 flex flex-col overflow-hidden">
+
+          <!-- Sección superior: eventos del día o próximos eventos -->
+          <div class="flex flex-col border-b border-gray-100" style="max-height:50%;min-height:0">
+            @if (calDiaSeleccionado) {
+              <div class="px-4 pt-4 pb-3 border-b border-gray-100 shrink-0">
+                <div class="flex items-center justify-between">
+                  <p class="text-sm font-bold text-gray-900">
+                    {{ calDiaSeleccionado | date:'EEEE d' : '' : 'es' }}
+                  </p>
+                  <button (click)="abrirModalEvento(calDiaSeleccionado)"
+                    class="text-xs text-emerald-600 font-semibold hover:bg-emerald-50 px-2 py-1 rounded-lg transition">
+                    + Agregar
+                  </button>
+                </div>
+                <p class="text-xs text-gray-400">{{ calDiaSeleccionado | date:'MMMM y' : '' : 'es' }}</p>
+              </div>
+              <div class="overflow-auto px-3 py-3 flex flex-col gap-2">
+                @if (calEventosDia.length === 0) {
+                  <div class="flex flex-col items-center justify-center h-16 text-center">
+                    <p class="text-xs text-gray-400">Sin eventos este día</p>
+                    <button (click)="abrirModalEvento(calDiaSeleccionado)"
+                      class="text-xs text-emerald-500 mt-1 hover:underline">Agregar evento</button>
+                  </div>
+                }
+                @for (ev of calEventosDia; track ev.id) {
+                  <div class="rounded-xl border p-3 hover:shadow-sm transition group"
+                    [class.border-rose-200]="ev.tipo === 'audiencia'"
+                    [class.border-amber-200]="ev.tipo === 'vencimiento'"
+                    [class.border-blue-200]="ev.tipo === 'cita'"
+                    [class.border-gray-200]="ev.tipo === 'otro'">
+                    <div class="flex items-start justify-between gap-1">
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-1.5 mb-1">
+                          <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full" [class]="tipoTextColor(ev.tipo)">{{ tipoLabel(ev.tipo) }}</span>
+                          @if (ev.hora) { <span class="text-[10px] text-gray-400 font-mono">{{ ev.hora }}</span> }
+                        </div>
+                        <p class="text-xs font-semibold text-gray-800 leading-tight">{{ ev.titulo }}</p>
+                        @if (ev.expedienteNro) { <p class="text-[10px] text-gray-400 mt-0.5">Exp. {{ ev.expedienteNro }}</p> }
+                      </div>
+                      <button (click)="eliminarEvento(ev.id)"
+                        class="opacity-0 group-hover:opacity-100 transition text-gray-300 hover:text-red-400 shrink-0 mt-0.5">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="px-4 pt-4 pb-3 border-b border-gray-100 shrink-0">
+                <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Próximos eventos</p>
+              </div>
+              <div class="overflow-auto px-3 py-3 flex flex-col gap-2">
+                @if (calProxEventos.length === 0) {
+                  <div class="flex flex-col items-center justify-center h-16 text-center">
+                    <p class="text-xs text-gray-400">No hay eventos próximos</p>
+                  </div>
+                }
+                @for (ev of calProxEventos; track ev.id) {
+                  <div (click)="calDiaSeleccionado = ev.fecha"
+                    class="rounded-xl border border-gray-200 p-3 hover:border-emerald-200 hover:bg-emerald-50/30 cursor-pointer transition">
+                    <div class="flex items-center gap-1.5 mb-1">
+                      <div class="w-1.5 h-1.5 rounded-full" [class]="tipoColor(ev.tipo)"></div>
+                      <span class="text-[10px] font-bold text-gray-500">{{ ev.fecha | date:'d MMM' : '' : 'es' }}</span>
+                      @if (ev.hora) { <span class="text-[10px] text-gray-400 font-mono">{{ ev.hora }}</span> }
+                    </div>
+                    <p class="text-xs font-semibold text-gray-800 truncate">{{ ev.titulo }}</p>
+                    @if (ev.expedienteNro) { <p class="text-[10px] text-gray-400 mt-0.5">Exp. {{ ev.expedienteNro }}</p> }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+          <!-- Sección inferior: lista de expedientes -->
+          <div class="flex flex-col flex-1 overflow-hidden">
+            <div class="px-4 pt-3 pb-2 shrink-0 flex items-center justify-between">
+              <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Expedientes</p>
+              <span class="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-bold">{{ expedientes.length }}</span>
+            </div>
+
+            <div class="flex-1 overflow-auto px-3 pb-3 flex flex-col gap-1.5">
+              @if (expedientes.length === 0) {
+                <div class="flex items-center justify-center h-16">
+                  <p class="text-xs text-gray-400">Cargando expedientes...</p>
+                </div>
+              }
+              @for (exp of expedientes; track exp.id) {
+                <div (click)="abrirModalEventoParaExp(exp)"
+                  class="rounded-lg border border-gray-200 px-3 py-2 hover:border-emerald-300 hover:bg-emerald-50/40 cursor-pointer transition group flex items-center gap-2">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-[11px] font-semibold text-gray-800 truncate leading-tight">{{ exp.nombre }}</p>
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                      @if (exp.nroExpediente) {
+                        <span class="text-[10px] font-mono text-emerald-600 font-semibold">{{ exp.nroExpediente }}</span>
+                        <span class="text-gray-300 text-[10px]">·</span>
+                      }
+                      <span class="text-[10px] text-gray-400 truncate">{{ exp.art }}</span>
+                    </div>
+                  </div>
+                  <div class="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center opacity-0 group-hover:opacity-100 transition shrink-0">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  }
+
+  <!-- ── LLAMADORAS PROPIAS ─────────────────────────────────────────────────── -->
+  @if (seccion === 'llamadoras') {
+    <div class="flex-1 overflow-y-auto p-6">
+      <div class="max-w-6xl mx-auto flex flex-col gap-6">
+
+        @if (cargandoLlamadoras) {
+          <div class="flex justify-center py-16">
+            <svg class="animate-spin h-8 w-8 text-emerald-400" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          </div>
+        }
+
+        @if (!cargandoLlamadoras) {
+          <!-- Header + navegación semanal -->
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-lg font-bold text-gray-800">Llamadoras Propias</h2>
+              <p class="text-xs text-gray-400 mt-0.5">${{ PAGO_POR_ACEPTO.toLocaleString('es-AR') }} por acepto · Semana {{ semanaLabel }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button (click)="semanaOffset = semanaOffset - 1; cargarLlamadoras()"
+                class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 transition">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <span class="text-sm font-semibold text-gray-700 min-w-[120px] text-center">{{ semanaLabel }}</span>
+              <button (click)="semanaOffset = semanaOffset + 1; cargarLlamadoras()"
+                [disabled]="esSemanaActual"
+                class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 transition disabled:opacity-30 disabled:cursor-not-allowed">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              <button (click)="semanaOffset = 0" [disabled]="esSemanaActual"
+                class="text-xs text-blue-600 hover:underline px-2 disabled:opacity-30 disabled:cursor-not-allowed">
+                Hoy
+              </button>
+            </div>
+          </div>
+
+          <!-- Cards de llamadoras -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            @for (ll of statsLlamadoras; track ll.label) {
+              <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-4">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">{{ ll.label }}</p>
+                    <p class="text-3xl font-black mt-1"
+                      [class.text-green-600]="ll.aceptos > 0"
+                      [class.text-gray-300]="ll.aceptos === 0">
+                      {{ ll.aceptos }}
+                    </p>
+                    <p class="text-xs text-gray-400 mt-0.5">acepto{{ ll.aceptos !== 1 ? 's' : '' }} esta semana</p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-xs text-gray-400 font-medium">A pagar</p>
+                    <p class="text-base font-black mt-0.5"
+                      [class.text-green-700]="ll.totalPagar > 0"
+                      [class.text-gray-300]="ll.totalPagar === 0">
+                      ${{ ll.totalPagar.toLocaleString('es-AR') }}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <p class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1.5">Almanaque</p>
+                  <div class="flex gap-1.5">
+                    @for (dia of diasSemana(semanaInfo.dias); track dia.iso) {
+                      <div class="flex flex-col items-center gap-1 flex-1">
+                        <span class="text-[9px] text-gray-400 font-medium">{{ dia.label }}</span>
+                        <div class="w-full aspect-square rounded-md transition-all cursor-default"
+                          [style.background]="heatColor(ll.porDia[dia.iso] ?? 0)"
+                          [title]="(ll.nombresPorDia[dia.iso]?.length ? ll.nombresPorDia[dia.iso].join('\n') : 'Sin aceptos')">
+                          @if ((ll.porDia[dia.iso] ?? 0) > 0) {
+                            <span class="flex items-center justify-center w-full h-full text-[9px] font-bold text-white">
+                              {{ ll.porDia[dia.iso] }}
+                            </span>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+
+          <!-- Resumen total -->
+          <div class="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-4 flex flex-col gap-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-bold text-sm">∑</div>
+                <div>
+                  <p class="text-sm font-bold text-gray-700">Total semana</p>
+                  <p class="text-xs text-gray-400">Suma de todas las llamadoras</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <p class="text-2xl font-black text-green-700">
+                  ${{ statsLlamadoras.reduce((s, l) => s + l.totalPagar, 0).toLocaleString('es-AR') }}
+                </p>
+                <p class="text-xs text-gray-400">
+                  {{ statsLlamadoras.reduce((s, l) => s + l.aceptos, 0) }} aceptos en total
+                </p>
+              </div>
+            </div>
+            <div class="border-t border-gray-100 pt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              @for (stat of statsLlamadoras; track stat.label) {
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-semibold text-gray-500">{{ stat.label }}</span>
+                  <span class="text-sm font-bold"
+                    [class.text-green-700]="stat.totalPagar > 0"
+                    [class.text-gray-300]="stat.totalPagar === 0">
+                    ${{ stat.totalPagar.toLocaleString('es-AR') }}
+                  </span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Detalle de aceptos -->
+          @if (resumenCasosSemana.length > 0) {
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-4 flex flex-col gap-4">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm">📋</div>
+                  <div>
+                    <p class="text-sm font-bold text-gray-700">Detalle de aceptos</p>
+                    <p class="text-xs text-gray-400">{{ resumenCasosSemana.length }} caso{{ resumenCasosSemana.length !== 1 ? 's' : '' }} esta semana</p>
+                  </div>
+                </div>
+                <button (click)="exportarExcelSemana()"
+                  class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Descargar Excel
+                </button>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs">
+                  <thead>
+                    <tr class="border-b border-gray-200 text-left text-gray-400 uppercase tracking-wider">
+                      <th class="py-2 pr-3 font-semibold">Llamadora</th>
+                      <th class="py-2 pr-3 font-semibold">Trabajador</th>
+                      <th class="py-2 pr-3 font-semibold">CUIL</th>
+                      <th class="py-2 pr-3 font-semibold">ART</th>
+                      <th class="py-2 pr-3 font-semibold">Días ILT</th>
+                      <th class="py-2 pr-3 font-semibold">Fecha</th>
+                      <th class="py-2 text-right font-semibold">Pago</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (r of resumenCasosSemana; track $index) {
+                      <tr class="border-b border-gray-50 hover:bg-gray-50 transition">
+                        <td class="py-2 pr-3 font-semibold text-gray-700">{{ r.llamadora }}</td>
+                        <td class="py-2 pr-3 text-gray-600">{{ r.trabajador }}</td>
+                        <td class="py-2 pr-3 text-gray-500 font-mono">{{ r.cuil }}</td>
+                        <td class="py-2 pr-3 text-gray-500">{{ r.art }}</td>
+                        <td class="py-2 pr-3 text-gray-500 text-center">{{ r.diasIlt }}</td>
+                        <td class="py-2 pr-3 text-gray-500">{{ r.fecha }}</td>
+                        <td class="py-2 text-right font-bold text-green-700">${{ PAGO_POR_ACEPTO.toLocaleString('es-AR') }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+        }
+
+      </div>
+    </div>
+  }
+
+</div>
+
+<!-- Modal expediente -->
+@if (modalCaso) {
+  <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col gap-5 p-6">
+
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 font-bold shrink-0">📋</div>
+        <div>
+          <h3 class="font-bold text-gray-800">Iniciar Expediente</h3>
+          <p class="text-xs text-gray-400">{{ modalCaso.Trabajador }}</p>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-semibold text-gray-600 uppercase tracking-wider">Número de Expediente *</label>
+        <input [(ngModel)]="expedienteInput" (keyup.enter)="guardarExpediente()" type="text"
+          placeholder="Ej: 10006/26"
+          class="border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono" />
+        @if (expedienteError) {
+          <p class="text-xs text-red-500 mt-0.5">{{ expedienteError }}</p>
+        }
+      </div>
+
+      <div class="flex gap-3 justify-end">
+        <button (click)="cerrarModal()" [disabled]="guardando"
+          class="px-4 py-2 rounded-xl border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition">
+          Cancelar
+        </button>
+        <button (click)="guardarExpediente()" [disabled]="guardando"
+          class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition flex items-center gap-2 disabled:opacity-50">
+          @if (guardando) { <span class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span> }
+          Guardar
+        </button>
+      </div>
+
+    </div>
+  </div>
+}
+
+<!-- Modal nuevo evento -->
+@if (mostrarModalEvento) {
+  <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" (click)="mostrarModalEvento = false">
+    <div class="bg-white rounded-2xl shadow-xl p-6 w-96" (click)="$event.stopPropagation()">
+      <h3 class="text-base font-bold text-gray-900 mb-4">Nuevo evento</h3>
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs text-gray-500 font-medium block mb-1">Título *</label>
+          <input [(ngModel)]="nuevoEvento.titulo" placeholder="Ej: Audiencia GARCIA JUAN"
+            class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">Fecha *</label>
+            <input type="date" [(ngModel)]="nuevoEvento.fecha"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">Hora</label>
+            <input type="time" [(ngModel)]="nuevoEvento.hora"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">Tipo</label>
+            <select [(ngModel)]="nuevoEvento.tipo"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-emerald-300">
+              <option value="audiencia">Audiencia</option>
+              <option value="vencimiento">Vencimiento</option>
+              <option value="cita">Cita</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">N° Expediente</label>
+            <input [(ngModel)]="nuevoEvento.expedienteNro" placeholder="Ej: 10006/26"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+          </div>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 font-medium block mb-1">Descripción</label>
+          <textarea [(ngModel)]="nuevoEvento.descripcion" rows="2" placeholder="Notas adicionales..."
+            class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-5 justify-end">
+        <button (click)="mostrarModalEvento = false"
+          class="px-4 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition">Cancelar</button>
+        <button (click)="agregarEvento()"
+          class="px-4 py-2 rounded-xl text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition">
+          Agregar
+        </button>
+      </div>
+    </div>
+  </div>
+}
