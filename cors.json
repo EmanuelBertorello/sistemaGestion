@@ -1,0 +1,20 @@
+[
+  {
+    "origin": [
+      "http://localhost:4200",
+      "http://localhost:4000",
+      "https://caoe2026.web.app",
+      "https://caoe2026.firebaseapp.com"
+    ],
+    "method": ["GET", "PUT", "POST", "DELETE", "OPTIONS", "HEAD"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": [
+      "Content-Type",
+      "Authorization",
+      "Content-Length",
+      "User-Agent",
+      "x-goog-resumable",
+      "x-firebase-storage-version"
+    ]
+  }
+]
