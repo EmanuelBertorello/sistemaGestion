@@ -15,7 +15,7 @@
         </svg>
       </button>
       <div class="sidebar-logo-text flex flex-col leading-none">
-        <span class="font-display text-white text-sm font-bold">Capeletti</span>
+        <span class="font-display text-white text-sm font-bold">Sistema</span>
         <span style="color:var(--gold);font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;font-weight:600;margin-top:1px">Abogados</span>
       </div>
     </div>
@@ -177,6 +177,19 @@
         </span>
         <span class="sidebar-item-label">Llamadoras Propias</span>
       </button>
+
+      @if (esSuperAdmin) {
+      <button class="sidebar-item" data-label="Estudios"
+        [class.active]="seccionActiva === 'estudios'"
+        (click)="seccionActiva = 'estudios'; cargarEstudios()">
+        <span class="sidebar-item-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+          </svg>
+        </span>
+        <span class="sidebar-item-label">Estudios</span>
+      </button>
+      }
 
     </div>
 
@@ -2025,6 +2038,182 @@
 
       </div>
     }
+
+  <!-- ══════════════════ ESTUDIOS ══════════════════ -->
+  @if (seccionActiva === 'estudios') {
+    <div class="flex flex-col gap-6 w-full">
+
+      <h2 class="text-lg font-bold text-gray-800">Gestión de Estudios Jurídicos</h2>
+
+      @if (cargandoEstudios) {
+        <div class="flex justify-center py-12">
+          <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      }
+
+      @if (!cargandoEstudios) {
+
+        <!-- Crear estudio -->
+        <div class="card p-6">
+          <h3 class="section-title mb-4">Crear nuevo estudio</h3>
+          @if (estudioError) {
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-red-600 text-xs">{{ estudioError }}</div>
+          }
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <input [(ngModel)]="estudioForm.nombre" placeholder="Nombre del estudio"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+            <input [(ngModel)]="estudioForm.adminEmail" placeholder="Email del admin"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+            <input [(ngModel)]="estudioForm.pagoPorAcepto" type="number" placeholder="Pago por acepto"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+            <button (click)="crearEstudio()" [disabled]="estudioGuardando"
+              class="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+              {{ estudioGuardando ? 'Creando...' : 'Crear estudio' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Lista de estudios -->
+        <div class="card p-6">
+          <h3 class="section-title mb-4">Estudios registrados ({{ estudios.length }})</h3>
+          @if (estudios.length === 0) {
+            <p class="text-sm text-gray-400">No hay estudios registrados.</p>
+          }
+          <div class="flex flex-col gap-2">
+            @for (e of estudios; track e.id) {
+              <div class="flex items-center gap-4 bg-gray-50 rounded-xl px-4 py-3">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+                  [class.bg-green-100]="e.activo" [class.text-green-700]="e.activo"
+                  [class.bg-gray-200]="!e.activo" [class.text-gray-400]="!e.activo">
+                  {{ e.nombre.charAt(0).toUpperCase() }}
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="font-semibold text-gray-800">{{ e.nombre }}</p>
+                  <p class="text-xs text-gray-400">{{ e.adminEmail }} · ${{ e.pagoPorAcepto?.toLocaleString('es-AR') }}/acepto</p>
+                </div>
+                <span class="text-xs font-bold px-2 py-0.5 rounded-full"
+                  [class.bg-green-100]="e.activo" [class.text-green-700]="e.activo"
+                  [class.bg-red-100]="!e.activo" [class.text-red-600]="!e.activo">
+                  {{ e.activo ? 'Activo' : 'Inactivo' }}
+                </span>
+                <button (click)="toggleEstudioActivo(e)"
+                  class="text-xs px-3 py-1.5 rounded-lg border transition"
+                  [class.border-red-200]="e.activo" [class.text-red-600]="e.activo" [class.hover:bg-red-50]="e.activo"
+                  [class.border-green-200]="!e.activo" [class.text-green-600]="!e.activo" [class.hover:bg-green-50]="!e.activo">
+                  {{ e.activo ? 'Desactivar' : 'Activar' }}
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Reglas de distribución -->
+        <div class="card p-6">
+          <h3 class="section-title mb-4">Reglas de distribución</h3>
+          <p class="text-xs text-gray-400 mb-4">Los casos VentaSI se asignan al primer estudio cuya regla matchee (por prioridad). Provincia es obligatoria, el resto son filtros opcionales.</p>
+
+          @if (reglaError) {
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-red-600 text-xs">{{ reglaError }}</div>
+          }
+
+          <!-- Form nueva regla -->
+          <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-4">
+            <select [(ngModel)]="reglaForm.estudioId"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+              <option value="">Estudio...</option>
+              @for (e of estudios; track e.id) {
+                <option [value]="e.id">{{ e.nombre }}</option>
+              }
+            </select>
+            <input [(ngModel)]="reglaForm.provincia" placeholder="Provincia"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+            <input [(ngModel)]="reglaForm.artFiltro" placeholder="ARTs (coma sep.)"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+            <input [(ngModel)]="reglaForm.minDiasILT" type="number" placeholder="ILT mín"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+            <input [(ngModel)]="reglaForm.prioridad" type="number" placeholder="Prioridad"
+              class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+            <button (click)="agregarRegla()" [disabled]="reglaGuardando"
+              class="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-semibold px-3 py-2 rounded-lg transition">
+              {{ reglaGuardando ? '...' : 'Agregar' }}
+            </button>
+          </div>
+
+          <!-- Lista de reglas -->
+          @if (reglasDistribucion.length === 0) {
+            <p class="text-sm text-gray-400">No hay reglas configuradas.</p>
+          }
+          @for (r of reglasDistribucion; track r.id) {
+            <div class="flex items-center gap-3 bg-purple-50 border border-purple-100 rounded-xl px-4 py-2.5 mb-2">
+              <span class="text-xs text-purple-500 font-bold w-6">{{ r.prioridad }}</span>
+              <span class="text-sm font-semibold text-gray-800 w-32">{{ nombreEstudio(r.estudioId) }}</span>
+              <span class="text-sm text-gray-600 flex-1">
+                {{ r.provincia }}
+                @if (r.artFiltro?.length) { · ART: {{ r.artFiltro!.join(', ') }} }
+                @if (r.minDiasILT) { · ILT ≥ {{ r.minDiasILT }} }
+                @if (r.tipoCaso === '1') { · HighTicket }
+                @if (r.tipoCaso === '0') { · Volumen }
+              </span>
+              <button (click)="eliminarRegla(r.id!)" class="text-red-400 hover:text-red-600 text-lg font-bold">×</button>
+            </div>
+          }
+        </div>
+
+        <!-- Distribución -->
+        <div class="card p-6">
+          <h3 class="section-title mb-4">Distribuir VentaSI a estudios</h3>
+          <div class="flex items-center gap-3 mb-4">
+            <button (click)="previsualizarDist()" [disabled]="distribuyendo"
+              class="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
+              {{ distribuyendo ? 'Cargando...' : 'Preview' }}
+            </button>
+            @if (distribucionPreview.length > 0) {
+              <button (click)="ejecutarDistribucion()" [disabled]="distribuyendo"
+                class="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
+                Distribuir {{ distribucionPreview.length }} casos
+              </button>
+            }
+            @if (distribucionResultado) {
+              <span class="text-sm text-green-700 font-semibold">
+                {{ distribucionResultado.distribuidos }} distribuidos · {{ distribucionResultado.sinMatch }} sin match
+              </span>
+            }
+          </div>
+
+          @if (distribucionPreview.length > 0) {
+            <div class="overflow-x-auto max-h-80 overflow-y-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b border-gray-200 text-left text-gray-400 uppercase tracking-wider">
+                    <th class="py-2 pr-3">Trabajador</th>
+                    <th class="py-2 pr-3">CUIL</th>
+                    <th class="py-2 pr-3">Provincia</th>
+                    <th class="py-2 pr-3">ART</th>
+                    <th class="py-2 pr-3">ILT</th>
+                    <th class="py-2 pr-3">Estudio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (p of distribucionPreview; track p.caso.id) {
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                      <td class="py-2 pr-3 font-semibold text-gray-700">{{ p.caso.Trabajador }}</td>
+                      <td class="py-2 pr-3 text-gray-500 font-mono">{{ p.caso.CUIL }}</td>
+                      <td class="py-2 pr-3 text-gray-500">{{ p.caso.Provincia_Ocurrencia }}</td>
+                      <td class="py-2 pr-3 text-gray-500">{{ p.caso.ART }}</td>
+                      <td class="py-2 pr-3 text-gray-500">{{ p.caso.Dias_ILT }}</td>
+                      <td class="py-2 pr-3 font-semibold text-purple-700">{{ p.estudioNombre }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+
+      }
+
+    </div>
+  }
 
   <!-- ══════════════════ MODAL DETALLE ══════════════════ -->
   @if (modalVisible) {

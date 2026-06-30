@@ -60,6 +60,15 @@
       [class.hover:text-gray-700]="seccion !== 'agenda'">
       Agenda
     </button>
+    <button (click)="seccion = 'cargar'; resetNuevoCaso()"
+      class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-emerald-500]="seccion === 'cargar'"
+      [class.text-emerald-700]="seccion === 'cargar'"
+      [class.border-transparent]="seccion !== 'cargar'"
+      [class.text-gray-500]="seccion !== 'cargar'"
+      [class.hover:text-gray-700]="seccion !== 'cargar'">
+      Cargar Caso
+    </button>
     <button (click)="seccion = 'llamadoras'; cargarLlamadoras()"
       class="text-xs font-semibold px-4 py-3 border-b-2 transition"
       [class.border-emerald-500]="seccion === 'llamadoras'"
@@ -178,8 +187,29 @@
                   </div>
                 </div>
 
-                <!-- Botón acción -->
-                <div class="shrink-0">
+                <!-- Botones acción -->
+                <div class="shrink-0 flex items-center gap-2">
+                  @if (!caso.nroExpediente) {
+                    @if (confirmNoVa !== caso.id) {
+                      <button (click)="confirmNoVa = caso.id!; $event.stopPropagation()"
+                        class="text-xs font-semibold px-3 py-2 rounded-xl bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition">
+                        No va
+                      </button>
+                    } @else {
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-xs text-red-600 font-medium">¿Segura?</span>
+                        <button (click)="marcarNoVa(caso); $event.stopPropagation()"
+                          [disabled]="marcandoNoVa[caso.id!]"
+                          class="text-xs font-bold px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition">
+                          {{ marcandoNoVa[caso.id!] ? '...' : 'Sí, descartar' }}
+                        </button>
+                        <button (click)="confirmNoVa = null; $event.stopPropagation()"
+                          class="text-xs px-2 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition">
+                          Cancelar
+                        </button>
+                      </div>
+                    }
+                  }
                   <button (click)="abrirModal(caso)"
                     class="text-xs font-semibold px-4 py-2 rounded-xl transition"
                     [class.bg-amber-500]="!caso.nroExpediente"
@@ -490,6 +520,193 @@
     </div>
   }
 
+  <!-- ── CARGAR CASO ─────────────────────────────────────────────────────────── -->
+  @if (seccion === 'cargar') {
+    <div class="flex-1 overflow-auto p-6">
+      <div class="max-w-2xl mx-auto">
+        <h2 class="text-lg font-bold text-gray-800 mb-4">Cargar nuevo caso</h2>
+
+        @if (ncExito) {
+          <div class="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 text-green-700 text-sm font-semibold">
+            {{ ncExito }}
+          </div>
+        }
+        @if (ncError) {
+          <div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-red-600 text-sm">
+            {{ ncError }}
+          </div>
+        }
+
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-5">
+
+          <!-- Tipo de caso -->
+          <div>
+            <label class="text-xs text-gray-500 uppercase tracking-wider mb-1.5 block font-semibold">Tipo de caso</label>
+            <div class="flex gap-3">
+              <button (click)="nuevoCaso.tipo = 'accidente'"
+                class="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition"
+                [class.border-emerald-500]="nuevoCaso.tipo === 'accidente'"
+                [class.bg-emerald-50]="nuevoCaso.tipo === 'accidente'"
+                [class.text-emerald-700]="nuevoCaso.tipo === 'accidente'"
+                [class.border-gray-200]="nuevoCaso.tipo !== 'accidente'"
+                [class.text-gray-500]="nuevoCaso.tipo !== 'accidente'">
+                Accidente Laboral
+              </button>
+              <button (click)="nuevoCaso.tipo = 'enfermedad'"
+                class="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition"
+                [class.border-purple-500]="nuevoCaso.tipo === 'enfermedad'"
+                [class.bg-purple-50]="nuevoCaso.tipo === 'enfermedad'"
+                [class.text-purple-700]="nuevoCaso.tipo === 'enfermedad'"
+                [class.border-gray-200]="nuevoCaso.tipo !== 'enfermedad'"
+                [class.text-gray-500]="nuevoCaso.tipo !== 'enfermedad'">
+                Enfermedad Profesional
+              </button>
+            </div>
+          </div>
+
+          <!-- Datos del trabajador -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="col-span-2">
+              <label class="text-xs text-gray-500 uppercase tracking-wider mb-1 block">Trabajador *</label>
+              <input [(ngModel)]="nuevoCaso.trabajador" type="text" placeholder="Nombre completo"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"/>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500 uppercase tracking-wider mb-1 block">CUIL *</label>
+              <input [(ngModel)]="nuevoCaso.cuil" type="text" placeholder="20-12345678-9"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-300"/>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500 uppercase tracking-wider mb-1 block">ART</label>
+              <input [(ngModel)]="nuevoCaso.art" type="text" placeholder="Nombre de la ART"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"/>
+            </div>
+            <div class="col-span-2">
+              <label class="text-xs text-gray-500 uppercase tracking-wider mb-1 block">Empresa</label>
+              <input [(ngModel)]="nuevoCaso.empresa" type="text" placeholder="Denominación del empleador"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"/>
+            </div>
+          </div>
+
+          <!-- Datos del siniestro -->
+          <div class="grid grid-cols-2 gap-3">
+            @if (nuevoCaso.tipo === 'accidente') {
+              <div>
+                <label class="text-xs text-gray-500 uppercase tracking-wider mb-1 block">Tipo accidente</label>
+                <select [(ngModel)]="nuevoCaso.tipoAccidente"
+                  class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                  <option value="">Seleccionar...</option>
+                  <option value="Accidente Laboral">Accidente Laboral</option>
+                  <option value="In Itinere">In Itinere</option>
+                </select>
+              </div>
+            }
+            <div>
+              <label class="text-xs text-gray-500 uppercase tracking-wider mb-1 block">Fecha {{ nuevoCaso.tipo === 'enfermedad' ? 'diagnóstico' : 'accidente' }}</label>
+              <input [(ngModel)]="nuevoCaso.fechaAccidente" type="date"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"/>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500 uppercase tracking-wider mb-1 block">Días ILT</label>
+              <input [(ngModel)]="nuevoCaso.diasIlt" type="number" placeholder="0"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"/>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500 uppercase tracking-wider mb-1 block">Localidad</label>
+              <input [(ngModel)]="nuevoCaso.localidad" type="text" placeholder="Localidad"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"/>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500 uppercase tracking-wider mb-1 block">Provincia</label>
+              <input [(ngModel)]="nuevoCaso.provincia" type="text" placeholder="Provincia"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"/>
+            </div>
+            <div class="col-span-2">
+              <label class="text-xs text-gray-500 uppercase tracking-wider mb-1 block">Diagnóstico</label>
+              <input [(ngModel)]="nuevoCaso.diagnostico" type="text" placeholder="Diagnóstico principal"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"/>
+            </div>
+            <div class="col-span-2">
+              <label class="text-xs text-gray-500 uppercase tracking-wider mb-1 block">Descripción del siniestro</label>
+              <textarea [(ngModel)]="nuevoCaso.descripcion" rows="3" placeholder="Descripción de lo ocurrido..."
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none"></textarea>
+            </div>
+          </div>
+
+          <!-- Archivos -->
+          <div class="border-t border-gray-100 pt-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-3 font-semibold">Documentación</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">Anexo (PDF)</label>
+                <input type="file" accept=".pdf" (change)="onNcFile($event, 'anexo')"
+                  class="w-full text-xs file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:font-semibold file:cursor-pointer"/>
+                @if (ncAnexo) { <p class="text-[10px] text-emerald-600 mt-1">{{ ncAnexo.name }}</p> }
+              </div>
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">DNI (PDF/imagen)</label>
+                <input type="file" accept=".pdf,image/*" (change)="onNcFile($event, 'dni')"
+                  class="w-full text-xs file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:font-semibold file:cursor-pointer"/>
+                @if (ncDni) { <p class="text-[10px] text-emerald-600 mt-1">{{ ncDni.name }}</p> }
+              </div>
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">Alta médica (opcional)</label>
+                <input type="file" accept=".pdf,image/*" (change)="onNcFile($event, 'alta')"
+                  class="w-full text-xs file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold file:cursor-pointer"/>
+                @if (ncAlta) { <p class="text-[10px] text-blue-600 mt-1">{{ ncAlta.name }}</p> }
+              </div>
+              <div>
+                <label class="text-xs text-gray-600 mb-1 block">Fotos secuelas (opcional)</label>
+                <input type="file" accept="image/*" multiple (change)="onNcSecuelas($event)"
+                  class="w-full text-xs file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-amber-50 file:text-amber-700 file:font-semibold file:cursor-pointer"/>
+                @if (ncSecuelas.length > 0) {
+                  <div class="flex flex-wrap gap-1 mt-1">
+                    @for (f of ncSecuelas; track $index) {
+                      <span class="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        {{ f.name }}
+                        <button (click)="quitarSecuela($index)" class="text-amber-400 hover:text-red-500 font-bold">×</button>
+                      </span>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- Progreso -->
+          @if (ncSubiendo) {
+            <div class="bg-emerald-50 rounded-xl p-4">
+              <div class="flex items-center gap-3">
+                <svg class="animate-spin h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+                <div class="flex-1">
+                  <p class="text-sm font-semibold text-emerald-700">Subiendo archivos... {{ ncProgreso }}%</p>
+                  <div class="w-full bg-emerald-200 rounded-full h-1.5 mt-1">
+                    <div class="bg-emerald-600 h-1.5 rounded-full transition-all" [style.width]="ncProgreso + '%'"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- Botón guardar -->
+          <button (click)="guardarNuevoCaso()"
+            [disabled]="ncSubiendo"
+            class="w-full py-3 rounded-xl text-white font-bold text-sm transition disabled:opacity-50"
+            [class.bg-emerald-600]="nuevoCaso.tipo === 'accidente'"
+            [class.hover:bg-emerald-700]="nuevoCaso.tipo === 'accidente'"
+            [class.bg-purple-600]="nuevoCaso.tipo === 'enfermedad'"
+            [class.hover:bg-purple-700]="nuevoCaso.tipo === 'enfermedad'">
+            {{ ncSubiendo ? 'Guardando...' : 'Cargar caso' }}
+          </button>
+
+        </div>
+      </div>
+    </div>
+  }
+
   <!-- ── LLAMADORAS PROPIAS ─────────────────────────────────────────────────── -->
   @if (seccion === 'llamadoras') {
     <div class="flex-1 overflow-y-auto p-6">
@@ -537,11 +754,16 @@
                   <div>
                     <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">{{ ll.label }}</p>
                     <p class="text-3xl font-black mt-1"
-                      [class.text-green-600]="ll.aceptos > 0"
-                      [class.text-gray-300]="ll.aceptos === 0">
-                      {{ ll.aceptos }}
+                      [class.text-green-600]="ll.netos > 0"
+                      [class.text-gray-300]="ll.netos === 0">
+                      {{ ll.netos }}
                     </p>
-                    <p class="text-xs text-gray-400 mt-0.5">acepto{{ ll.aceptos !== 1 ? 's' : '' }} esta semana</p>
+                    <p class="text-xs text-gray-400 mt-0.5">
+                      {{ ll.aceptos }} acepto{{ ll.aceptos !== 1 ? 's' : '' }}
+                      @if (ll.noVa > 0) {
+                        <span class="text-red-500 font-semibold"> − {{ ll.noVa }} no va</span>
+                      }
+                    </p>
                   </div>
                   <div class="text-right">
                     <p class="text-xs text-gray-400 font-medium">A pagar</p>
@@ -590,7 +812,10 @@
                   ${{ statsLlamadoras.reduce((s, l) => s + l.totalPagar, 0).toLocaleString('es-AR') }}
                 </p>
                 <p class="text-xs text-gray-400">
-                  {{ statsLlamadoras.reduce((s, l) => s + l.aceptos, 0) }} aceptos en total
+                  {{ statsLlamadoras.reduce((s, l) => s + l.netos, 0) }} netos
+                  @if (statsLlamadoras.reduce((s, l) => s + l.noVa, 0) > 0) {
+                    <span class="text-red-500">({{ statsLlamadoras.reduce((s, l) => s + l.noVa, 0) }} no va)</span>
+                  }
                 </p>
               </div>
             </div>
@@ -640,14 +865,20 @@
                   </thead>
                   <tbody>
                     @for (r of resumenCasosSemana; track $index) {
-                      <tr class="border-b border-gray-50 hover:bg-gray-50 transition">
+                      <tr class="border-b border-gray-50 hover:bg-gray-50 transition"
+                        [class.opacity-50]="r.noVa" [class.line-through]="r.noVa">
                         <td class="py-2 pr-3 font-semibold text-gray-700">{{ r.llamadora }}</td>
-                        <td class="py-2 pr-3 text-gray-600">{{ r.trabajador }}</td>
+                        <td class="py-2 pr-3 text-gray-600">
+                          {{ r.trabajador }}
+                          @if (r.noVa) { <span class="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold ml-1 no-underline" style="text-decoration:none">NO VA</span> }
+                        </td>
                         <td class="py-2 pr-3 text-gray-500 font-mono">{{ r.cuil }}</td>
                         <td class="py-2 pr-3 text-gray-500">{{ r.art }}</td>
                         <td class="py-2 pr-3 text-gray-500 text-center">{{ r.diasIlt }}</td>
                         <td class="py-2 pr-3 text-gray-500">{{ r.fecha }}</td>
-                        <td class="py-2 text-right font-bold text-green-700">${{ PAGO_POR_ACEPTO.toLocaleString('es-AR') }}</td>
+                        <td class="py-2 text-right font-bold" [class.text-green-700]="!r.noVa" [class.text-red-500]="r.noVa">
+                          {{ r.noVa ? '− $' : '$' }}{{ PAGO_POR_ACEPTO.toLocaleString('es-AR') }}
+                        </td>
                       </tr>
                     }
                   </tbody>

@@ -6,7 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { FirestoreService } from '../../services/firestore.service';
 import { StorageService, MAX_FILE_MB } from '../../services/storage.service';
 import { CerteroService, SumarioCertero } from '../../services/certero.service';
-import { AnexoService } from '../../services/anexo.service';
+import { AnexoService, DatosLetrado } from '../../services/anexo.service';
 import { CasoModel, EstadoCaso } from './caso.model';
 import { NoticiaItem } from '../../services/firestore.service';
 
@@ -74,8 +74,13 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   busquedaSeguimiento = '';
   buscando = false;
   cargandoInicial = true;
+  mostrarErrorPC = false;
   seccionActiva: 'caso' | 'acepto' | 'pendientes' | 'historial' | 'seguimiento' = 'caso';
   casoModal: CasoModel | null = null;
+  modalCertero: SumarioCertero | null = null;
+  modalCargandoCertero = false;
+  modalRelContactos: Record<string, SumarioCertero | null> = {};
+  modalCargandoRel: Record<string, boolean> = {};
   mostrarModalMatricula = false;
   mostrarModalPerfil = false;
   perfilApodo = '';
@@ -83,6 +88,8 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   perfilPasswordActual = '';
   perfilGuardando = false;
   perfilMensaje = '';
+  estudioId: string | null = null;
+  datosLetrado: DatosLetrado | undefined = undefined;
   perfilError = '';
 
   limitePendientes = 35; // se sobreescribe desde Firestore según el apodo
@@ -129,6 +136,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     { value: 'acepto',       label: 'Acepto' },
     { value: 'pendiente',    label: 'Pendiente' },
     { value: 'sincontacto',  label: 'Sin Contacto' },
+    { value: 'sinrespuesta', label: 'Sin Respuesta' },
     { value: 'conabogado',   label: 'Con Abogado' },
     { value: 'nointeresado', label: 'No Interesado' },
   ];
@@ -153,6 +161,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     try {
       const email = this.auth.getCurrentEmail();
       const uid = this.auth.getCurrentUid();
+      if (email === 'georginachitarroni30@hotmail.com') { this.mostrarErrorPC = true; this.cargandoInicial = false; this.cdr.detectChanges(); return; }
       // Registrar automáticamente si no existe en la colección usuarios
       this.firestoreService.asegurarUsuarioRegistrado(uid, email);
       this.apodoUsuario = await this.firestoreService.getApodoPorEmail(email);
@@ -164,6 +173,18 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       this.limiteDiario    = config.limiteDiario ?? 0;
       this.requiereDocs       = config.requiereDocs ?? true;
       this.requiereExpediente = config.requiereExpediente ?? false;
+      this.estudioId = await this.firestoreService.getEstudioIdPorEmail(email);
+      if (this.estudioId) {
+        const estudio = await this.firestoreService.getEstudio(this.estudioId);
+        if (estudio?.letradoNombre) {
+          this.datosLetrado = {
+            nombre: estudio.letradoNombre,
+            cuit: estudio.letradoCuit ?? '',
+            email: estudio.letradoEmail ?? '',
+            matricula: estudio.letradoMatricula ?? '',
+          };
+        }
+      }
 
       // Registrar presencia y mantener heartbeat cada 30s
       await this.firestoreService.registrarPresencia(email, this.apodoUsuario);
@@ -305,23 +326,39 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     const casoAnteriorId = buscarNuevo ? this.caso?.id : undefined;
 
     try {
-      // Siempre chequear casos pre-asignados primero (no filtra por perfil, no devuelve el anterior)
-      const yaAsignado = await this.firestoreService.getCasoAsignadoA(identificador, this.auth.getCurrentEmail());
-      if (yaAsignado && yaAsignado.id !== casoAnteriorId) {
-        if (yaAsignado.id && yaAsignado.ASGINADO !== identificador) {
-          this.firestoreService.reservarCaso(yaAsignado.id!, identificador);
+      if (this.estudioId) {
+        // Cola del estudio externo (casos_ventasi)
+        const yaAsignado = await this.firestoreService.getCasoAsignadoAEstudio(this.estudioId, identificador, this.auth.getCurrentEmail());
+        if (yaAsignado && yaAsignado.id !== casoAnteriorId) {
+          this.caso = yaAsignado;
+          this.cargarSumario(yaAsignado.CUIL);
+          return;
         }
-        this.caso = yaAsignado;
-        this.cargarSumario(yaAsignado.CUIL);
-        return;
-      }
-
-      const siguiente = await this.firestoreService.getSiguienteCaso(this.apodoUsuario, this.auth.getCurrentEmail(), this.perfilLlamador);
-      if (siguiente) {
-        if (siguiente.id) await this.firestoreService.reservarCaso(siguiente.id, identificador);
-        this.caso = siguiente;
-        this.cargarSumario(siguiente.CUIL);
-        return;
+        const siguiente = await this.firestoreService.getSiguienteCasoEstudio(this.estudioId, this.apodoUsuario, this.auth.getCurrentEmail(), this.perfilLlamador);
+        if (siguiente) {
+          if (siguiente.id) await this.firestoreService.reservarCasoEstudio(siguiente.id, identificador);
+          this.caso = siguiente;
+          this.cargarSumario(siguiente.CUIL);
+          return;
+        }
+      } else {
+        // Cola normal Capeletti (BDmadre)
+        const yaAsignado = await this.firestoreService.getCasoAsignadoA(identificador, this.auth.getCurrentEmail());
+        if (yaAsignado && yaAsignado.id !== casoAnteriorId) {
+          if (yaAsignado.id && yaAsignado.ASGINADO !== identificador) {
+            this.firestoreService.reservarCaso(yaAsignado.id!, identificador);
+          }
+          this.caso = yaAsignado;
+          this.cargarSumario(yaAsignado.CUIL);
+          return;
+        }
+        const siguiente = await this.firestoreService.getSiguienteCaso(this.apodoUsuario, this.auth.getCurrentEmail(), this.perfilLlamador);
+        if (siguiente) {
+          if (siguiente.id) await this.firestoreService.reservarCaso(siguiente.id, identificador);
+          this.caso = siguiente;
+          this.cargarSumario(siguiente.CUIL);
+          return;
+        }
       }
     } catch (e: any) {
       this.sinDatosError = e?.message ?? String(e);
@@ -383,6 +420,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       interesado:   'Pendiente',
       nocontesto:   'Pendiente',
       sincontacto:  'Sin Contacto',
+      sinrespuesta: 'Sin Respuesta',
       conabogado:   'Con Abogado',
       nointeresado: 'No Interesado',
     };
@@ -390,7 +428,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   }
 
   get esEstadoDescartar(): boolean {
-    return ['sincontacto', 'conabogado', 'nointeresado'].includes(this.estadoActivo);
+    return ['sincontacto', 'sinrespuesta', 'conabogado', 'nointeresado'].includes(this.estadoActivo);
   }
 
   getEstadoColor(estado: string): string {
@@ -400,6 +438,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       interesado:   'bg-yellow-100 text-yellow-700',
       nocontesto:   'bg-yellow-100 text-yellow-700',
       sincontacto:  'bg-red-100 text-red-700',
+      sinrespuesta: 'bg-amber-100 text-amber-700',
       conabogado:   'bg-orange-100 text-orange-700',
       nointeresado: 'bg-gray-100 text-gray-600',
     };
@@ -602,7 +641,10 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       } else {
         // Caso actual: marcar como acepto en Firestore YA (sin esperar "Siguiente caso")
         // así Josefina lo ve inmediatamente
-        await this.firestoreService.marcarProcesado(
+        const markFn = this.estudioId
+          ? this.firestoreService.marcarProcesadoEstudio.bind(this.firestoreService)
+          : this.firestoreService.marcarProcesado.bind(this.firestoreService);
+        await markFn(
           casoId,
           'acepto',
           this.auth.getCurrentEmail().trim(),
@@ -1004,6 +1046,45 @@ export class DashboardLlamador implements OnInit, OnDestroy {
     window.open(`https://wa.me/54${telefono}?text=${txt}`, '_blank');
   }
 
+  abrirCasoModal(caso: CasoModel): void {
+    this.casoModal = caso;
+    this.modalCertero = caso.certeroData as SumarioCertero | null ?? null;
+    this.modalRelContactos = {};
+    this.modalCargandoRel = {};
+    if (caso.contactosFamiliares) {
+      this.modalRelContactos = { ...caso.contactosFamiliares };
+    }
+  }
+
+  async buscarCerteroModal(): Promise<void> {
+    if (!this.casoModal?.CUIL || this.modalCargandoCertero) return;
+    this.modalCargandoCertero = true;
+    this.cdr.detectChanges();
+    const data = await this.certero.getSumario(this.casoModal.CUIL);
+    this.modalCertero = data;
+    this.modalCargandoCertero = false;
+    if (data && this.casoModal.id) {
+      this.firestoreService.guardarSumarioCertero(this.casoModal.id, data);
+      this.casoModal = { ...this.casoModal, certeroData: data as any };
+      const idx = this.historial.findIndex(c => c.id === this.casoModal!.id);
+      if (idx >= 0) this.historial[idx] = { ...this.historial[idx], certeroData: data as any };
+    }
+    this.cdr.detectChanges();
+  }
+
+  async buscarContactoFamiliar(cuil: string): Promise<void> {
+    if (this.modalCargandoRel[cuil]) return;
+    this.modalCargandoRel = { ...this.modalCargandoRel, [cuil]: true };
+    this.cdr.detectChanges();
+    const data = await this.certero.getSumario(cuil);
+    this.modalRelContactos = { ...this.modalRelContactos, [cuil]: data };
+    this.modalCargandoRel = { ...this.modalCargandoRel, [cuil]: false };
+    if (this.casoModal?.id) {
+      this.firestoreService.guardarContactosFamiliares(this.casoModal.id, this.modalRelContactos);
+    }
+    this.cdr.detectChanges();
+  }
+
   async reintentar(): Promise<void> {
     this.sinDatos = false;
     this.detenerPolling();
@@ -1023,7 +1104,10 @@ export class DashboardLlamador implements OnInit, OnDestroy {
       // Si ya fue procesado (ej: acepto marcado al subir docs), no llamar de nuevo
       // para evitar duplicar notificaciones y estadísticas
       if (!this.caso.procesado) {
-        await this.firestoreService.marcarProcesado(
+        const markFn2 = this.estudioId
+          ? this.firestoreService.marcarProcesadoEstudio.bind(this.firestoreService)
+          : this.firestoreService.marcarProcesado.bind(this.firestoreService);
+        await markFn2(
           this.caso.id,
           this.estadoActivo,
           this.auth.getCurrentEmail().trim(),
@@ -1064,7 +1148,7 @@ export class DashboardLlamador implements OnInit, OnDestroy {
   generarAnexo(caso?: CasoModel | null): void {
     const target = caso ?? this.caso;
     if (!target) return;
-    this.anexo.generarAnexo(target);
+    this.anexo.generarAnexo(target, this.datosLetrado);
   }
 
   abrirModalPerfil(): void {

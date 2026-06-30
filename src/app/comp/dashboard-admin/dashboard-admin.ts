@@ -3,14 +3,14 @@ import { FormsModule } from '@angular/forms';
 import { DatePipe, isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
-import { FirestoreService, UploadResult, LlamadorStats, NoticiaItem } from '../../services/firestore.service';
+import { FirestoreService, UploadResult, LlamadorStats, NoticiaItem, Estudio, ReglaDistribucion } from '../../services/firestore.service';
 import { EmailService } from '../../services/email.service';
 import { CerteroService } from '../../services/certero.service';
 import { AnexoService } from '../../services/anexo.service';
 import { CasoModel, EstadoCaso } from '../dashboard-llamador/caso.model';
 import * as XLSX from 'xlsx';
 
-type SeccionActiva = 'estadisticas' | 'acepto' | 'interesado' | 'sincontacto' | 'conabogado' | 'nointeresado' | 'cargar' | 'historial' | 'duplicados' | 'noticias' | 'cola' | 'ventasi' | 'llamadoras';
+type SeccionActiva = 'estadisticas' | 'acepto' | 'interesado' | 'sincontacto' | 'conabogado' | 'nointeresado' | 'cargar' | 'historial' | 'duplicados' | 'noticias' | 'cola' | 'ventasi' | 'llamadoras' | 'estudios';
 
 type EstadoUpload = 'idle' | 'preview' | 'subiendo' | 'limpiando' | 'done' | 'error';
 
@@ -67,6 +67,7 @@ export class DashboardAdmin implements OnInit, OnDestroy {
 
   sidebarCollapsed = false;
   seccionActiva: SeccionActiva = 'estadisticas';
+  get esSuperAdmin(): boolean { return this.auth.isSuperAdmin(); }
 
   // Filtro de período en estadísticas
   periodoFiltro: 'semana' | 'mes' | 'anual' | 'total' = 'total';
@@ -1614,10 +1615,16 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   // ── Llamadoras Propias ────────────────────────────────────
 
   readonly LLAMADORAS_PROPIAS = [
-    { label: 'Nanci',  apodo: 'nanci',  email: '' },
-    { label: 'CR',     apodo: 'cami',   email: 'cr4361990@gmail.com' },
-    { label: 'Daiana', apodo: 'daiana', email: 'daianadagostino18@gmail.com' },
-    { label: 'Iara',   apodo: 'iara',   email: '' },
+    { label: 'Nanci',     apodo: 'nanci',     email: '' },
+    { label: 'CR',        apodo: 'cami',      email: 'cr4361990@gmail.com' },
+    { label: 'Daiana',    apodo: 'daiana',     email: 'daianadagostino18@gmail.com' },
+    { label: 'Iara',      apodo: 'iara',       email: '' },
+    { label: 'Antoo',     apodo: 'ANTOO',      email: 'antofontana1960@gmail.com' },
+    { label: 'Georgina',  apodo: 'GEORGINA',   email: 'georginachitarroni30@hotmail.com' },
+    { label: 'Merce',     apodo: 'merce',      email: 'mercedesfretes7@gmail.com' },
+    { label: 'Ana',       apodo: 'ana',        email: 'anamorelli21@gmail.com' },
+    { label: 'Florencia', apodo: 'FLORENCIA',  email: 'pistochinif@gmail.com' },
+    { label: 'Jorgelina', apodo: 'JORGELINA',  email: 'kuki.8.jr@gmail.com' },
   ];
   readonly PAGO_POR_ACEPTO = 40_000;
 
@@ -1744,6 +1751,134 @@ export class DashboardAdmin implements OnInit, OnDestroy {
   }
 
   get esSemanaActual(): boolean { return this.semanaOffset === 0; }
+
+  // ── Gestión de Estudios ──────────────────────────────────
+
+  estudios: Estudio[] = [];
+  reglasDistribucion: ReglaDistribucion[] = [];
+  cargandoEstudios = false;
+  estudioForm = { nombre: '', slug: '', adminEmail: '', pagoPorAcepto: 40000 };
+  estudioGuardando = false;
+  estudioError = '';
+
+  reglaForm = { estudioId: '', provincia: '', artFiltro: '', minDiasILT: 0, tipoCaso: '', prioridad: 1 };
+  reglaGuardando = false;
+  reglaError = '';
+
+  distribucionPreview: Array<{ caso: CasoModel; estudioId: string; estudioNombre: string; reglaDesc: string }> = [];
+  distribuyendo = false;
+  distribucionResultado: { distribuidos: number; sinMatch: number } | null = null;
+
+  async cargarEstudios(): Promise<void> {
+    this.cargandoEstudios = true;
+    this.cdr.detectChanges();
+    try {
+      const [estudios, reglas] = await Promise.all([
+        this.fs.getEstudios(),
+        this.fs.getReglasDistribucion(),
+      ]);
+      this.estudios = estudios;
+      this.reglasDistribucion = reglas;
+    } finally {
+      this.cargandoEstudios = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async crearEstudio(): Promise<void> {
+    if (!this.estudioForm.nombre.trim() || !this.estudioForm.adminEmail.trim()) {
+      this.estudioError = 'Nombre y email del admin son obligatorios.';
+      return;
+    }
+    this.estudioGuardando = true;
+    this.estudioError = '';
+    try {
+      await this.fs.crearEstudio({
+        nombre: this.estudioForm.nombre.trim(),
+        slug: this.estudioForm.slug.trim() || this.estudioForm.nombre.trim().toLowerCase().replace(/\s+/g, '-'),
+        adminEmail: this.estudioForm.adminEmail.trim(),
+        activo: true,
+        pagoPorAcepto: this.estudioForm.pagoPorAcepto,
+      });
+      this.estudioForm = { nombre: '', slug: '', adminEmail: '', pagoPorAcepto: 40000 };
+      await this.cargarEstudios();
+    } catch (e: any) {
+      this.estudioError = e.message;
+    } finally {
+      this.estudioGuardando = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async toggleEstudioActivo(estudio: Estudio): Promise<void> {
+    await this.fs.actualizarEstudio(estudio.id!, { activo: !estudio.activo });
+    estudio.activo = !estudio.activo;
+    this.cdr.detectChanges();
+  }
+
+  async agregarRegla(): Promise<void> {
+    if (!this.reglaForm.estudioId || !this.reglaForm.provincia.trim()) {
+      this.reglaError = 'Estudio y provincia son obligatorios.';
+      return;
+    }
+    this.reglaGuardando = true;
+    this.reglaError = '';
+    try {
+      const artFiltro = this.reglaForm.artFiltro.trim() ? this.reglaForm.artFiltro.split(',').map(a => a.trim()) : [];
+      await this.fs.crearReglaDistribucion({
+        estudioId: this.reglaForm.estudioId,
+        provincia: this.reglaForm.provincia.trim(),
+        artFiltro: artFiltro.length > 0 ? artFiltro : undefined,
+        minDiasILT: this.reglaForm.minDiasILT || undefined,
+        tipoCaso: this.reglaForm.tipoCaso || undefined,
+        prioridad: this.reglaForm.prioridad,
+        activa: true,
+      });
+      this.reglaForm = { estudioId: '', provincia: '', artFiltro: '', minDiasILT: 0, tipoCaso: '', prioridad: 1 };
+      await this.cargarEstudios();
+    } catch (e: any) {
+      this.reglaError = e.message;
+    } finally {
+      this.reglaGuardando = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async eliminarRegla(id: string): Promise<void> {
+    await this.fs.eliminarReglaDistribucion(id);
+    this.reglasDistribucion = this.reglasDistribucion.filter(r => r.id !== id);
+    this.cdr.detectChanges();
+  }
+
+  nombreEstudio(id: string): string {
+    return this.estudios.find(e => e.id === id)?.nombre ?? '?';
+  }
+
+  async previsualizarDist(): Promise<void> {
+    this.distribuyendo = true;
+    this.distribucionResultado = null;
+    this.cdr.detectChanges();
+    try {
+      this.distribucionPreview = await this.fs.previsualizarDistribucion();
+    } finally {
+      this.distribuyendo = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async ejecutarDistribucion(): Promise<void> {
+    this.distribuyendo = true;
+    this.cdr.detectChanges();
+    try {
+      this.distribucionResultado = await this.fs.distribuirCasosVentaSi(n => {
+        this.cdr.detectChanges();
+      });
+      this.distribucionPreview = [];
+    } finally {
+      this.distribuyendo = false;
+      this.cdr.detectChanges();
+    }
+  }
 
   // ── Nav ──────────────────────────────────────────────────
 

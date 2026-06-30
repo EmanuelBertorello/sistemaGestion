@@ -27,7 +27,7 @@ import { firebaseApp } from '../firebase.config';
 import { CasoModel, EstadoCaso } from '../comp/dashboard-llamador/caso.model';
 import { Expediente, EtapaExpediente } from '../comp/dashboard-abogado/expediente.model';
 
-export type RolUsuario = 'llamador' | 'abogado' | 'josefina';
+export type RolUsuario = 'llamador' | 'abogado' | 'josefina' | 'admin_estudio';
 
 export interface UsuarioApp {
   uid: string;
@@ -35,6 +35,34 @@ export interface UsuarioApp {
   apodo: string;
   rol?: RolUsuario;
   modulos?: string[];
+  estudioId?: string;
+  esAdminEstudio?: boolean;
+  creadoEn?: any;
+}
+
+export interface Estudio {
+  id?: string;
+  nombre: string;
+  slug: string;
+  adminEmail: string;
+  activo: boolean;
+  pagoPorAcepto: number;
+  letradoNombre?: string;
+  letradoCuit?: string;
+  letradoEmail?: string;
+  letradoMatricula?: string;
+  creadoEn?: any;
+}
+
+export interface ReglaDistribucion {
+  id?: string;
+  estudioId: string;
+  provincia: string;
+  artFiltro?: string[];
+  minDiasILT?: number;
+  tipoCaso?: string;
+  prioridad: number;
+  activa: boolean;
   creadoEn?: any;
 }
 
@@ -811,6 +839,7 @@ export class FirestoreService {
           ...fila,
           ASGINADO: (fila['ASGINADO'] ?? '').toString().trim(),
           esVentaSi: true,
+          estudioId: '',
           procesado: false,
           estado: '',
           procesadoPor: '',
@@ -982,6 +1011,33 @@ export class FirestoreService {
 
   async guardarSumarioCertero(id: string, sumario: object): Promise<void> {
     await updateDoc(doc(this.db, COL_CASOS, id), { certeroData: sumario });
+  }
+
+  async guardarContactosFamiliares(id: string, contactos: Record<string, any>): Promise<void> {
+    await updateDoc(doc(this.db, COL_CASOS, id), { contactosFamiliares: contactos });
+  }
+
+  async crearCasoManual(data: Record<string, any>): Promise<string> {
+    const hoy = new Date();
+    const fechaAcepto = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+    const ref = await addDoc(collection(this.db, COL_CASOS), {
+      ...data,
+      procesado: true,
+      estado: 'acepto',
+      fechaAcepto,
+      esVentaSi: false,
+      procesadoTimestamp: serverTimestamp(),
+      creadoEn: serverTimestamp(),
+    });
+    return ref.id;
+  }
+
+  async marcarCasoNoVa(id: string): Promise<void> {
+    await updateDoc(doc(this.db, COL_CASOS, id), {
+      estado: 'nova',
+      novaTimestamp: serverTimestamp(),
+      novaPor: 'josefina',
+    });
   }
 
   // ── Reglas de asignación (Cola Personal) ─────────────────
@@ -1632,5 +1688,221 @@ export class FirestoreService {
 
   async eliminarExpedienteModulo(id: string): Promise<void> {
     await deleteDoc(doc(this.db, 'expedientes_modulo', id));
+  }
+
+  // ─── ESTUDIOS (multi-tenant) ─────────────────────────────────────────────
+
+  async getEstudios(): Promise<Estudio[]> {
+    const snap = await getDocs(collection(this.db, 'estudios'));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Estudio));
+  }
+
+  async getEstudio(id: string): Promise<Estudio | null> {
+    const snap = await getDoc(doc(this.db, 'estudios', id));
+    return snap.exists() ? { id: snap.id, ...snap.data() } as Estudio : null;
+  }
+
+  async crearEstudio(data: Omit<Estudio, 'id'>): Promise<string> {
+    const ref = await addDoc(collection(this.db, 'estudios'), { ...data, creadoEn: serverTimestamp() });
+    return ref.id;
+  }
+
+  async actualizarEstudio(id: string, data: Partial<Estudio>): Promise<void> {
+    await updateDoc(doc(this.db, 'estudios', id), data as any);
+  }
+
+  // ─── REGLAS DE DISTRIBUCIÓN ──────────────────────────────────────────────
+
+  async getReglasDistribucion(): Promise<ReglaDistribucion[]> {
+    const snap = await getDocs(collection(this.db, 'reglas_distribucion'));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as ReglaDistribucion))
+      .sort((a, b) => (a.prioridad ?? 99) - (b.prioridad ?? 99));
+  }
+
+  async crearReglaDistribucion(data: Omit<ReglaDistribucion, 'id'>): Promise<string> {
+    const ref = await addDoc(collection(this.db, 'reglas_distribucion'), { ...data, creadoEn: serverTimestamp() });
+    return ref.id;
+  }
+
+  async actualizarReglaDistribucion(id: string, data: Partial<ReglaDistribucion>): Promise<void> {
+    await updateDoc(doc(this.db, 'reglas_distribucion', id), data as any);
+  }
+
+  async eliminarReglaDistribucion(id: string): Promise<void> {
+    await deleteDoc(doc(this.db, 'reglas_distribucion', id));
+  }
+
+  // ─── DISTRIBUCIÓN DE VENTASI ─────────────────────────────────────────────
+
+  async previsualizarDistribucion(): Promise<Array<{ caso: CasoModel; estudioId: string; estudioNombre: string; reglaDesc: string }>> {
+    const [reglas, estudios] = await Promise.all([
+      this.getReglasDistribucion(),
+      this.getEstudios(),
+    ]);
+    const estudioMap = new Map(estudios.map(e => [e.id!, e.nombre]));
+    const snap = await getDocs(query(collection(this.db, COL_CASOS_VENTA_SI), where('procesado', '==', false)));
+    const sinAsignar = snap.docs.filter(d => {
+      const eid = d.data()['estudioId'];
+      return !eid || eid === '';
+    });
+
+    const result: Array<{ caso: CasoModel; estudioId: string; estudioNombre: string; reglaDesc: string }> = [];
+    for (const d of sinAsignar) {
+      const data = d.data() as any;
+      const caso = { id: d.id, ...data } as CasoModel;
+      const prov = (data['Provincia_Ocurrencia'] ?? '').toString().toLowerCase().trim();
+      const art = (data['ART'] ?? data['Emp_Afiliacion_Vigente'] ?? '').toString().trim();
+      const diasIlt = Number(data['Dias_ILT'] ?? 0);
+      const tipoCaso = (data['tipoCaso'] ?? '').toString().trim();
+
+      for (const regla of reglas) {
+        if (!regla.activa) continue;
+        if (regla.provincia.toLowerCase().trim() !== prov) continue;
+        if (regla.artFiltro?.length && !regla.artFiltro.some(a => art.toLowerCase().includes(a.toLowerCase()))) continue;
+        if (regla.minDiasILT && diasIlt < regla.minDiasILT) continue;
+        if (regla.tipoCaso && regla.tipoCaso !== tipoCaso) continue;
+        result.push({ caso, estudioId: regla.estudioId, estudioNombre: estudioMap.get(regla.estudioId) ?? '?', reglaDesc: `Prov: ${regla.provincia}` });
+        break;
+      }
+    }
+    return result;
+  }
+
+  async distribuirCasosVentaSi(onProgress?: (n: number) => void): Promise<{ distribuidos: number; sinMatch: number }> {
+    const preview = await this.previsualizarDistribucion();
+    const chunkSize = 499;
+    let distribuidos = 0;
+    for (let i = 0; i < preview.length; i += chunkSize) {
+      const chunk = preview.slice(i, i + chunkSize);
+      const batch = writeBatch(this.db);
+      for (const p of chunk) {
+        batch.update(doc(this.db, COL_CASOS_VENTA_SI, p.caso.id!), {
+          estudioId: p.estudioId,
+          distribuidoEn: serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      distribuidos += chunk.length;
+      onProgress?.(distribuidos);
+    }
+    const snap = await getDocs(query(collection(this.db, COL_CASOS_VENTA_SI), where('procesado', '==', false)));
+    const sinMatch = snap.docs.filter(d => { const eid = d.data()['estudioId']; return !eid || eid === ''; }).length;
+    return { distribuidos, sinMatch };
+  }
+
+  // ─── COLA ESTUDIO (paralela a BDmadre) ───────────────────────────────────
+
+  async getSiguienteCasoEstudio(estudioId: string, apodo?: string, email?: string, perfil?: string): Promise<CasoModel | null> {
+    const ref = collection(this.db, COL_CASOS_VENTA_SI);
+    const matchPerfil = (data: any): boolean => {
+      if (!perfil) return true;
+      const tc = (data['tipoCaso'] ?? '').toString().trim();
+      if (perfil === 'highticket') return tc === '1';
+      if (perfil === 'volumen') return tc === '0';
+      return true;
+    };
+
+    // Buscar asignados primero
+    if (apodo || email) {
+      const variantes = this._buildVariantes(apodo, email);
+      const arr = Array.from(variantes).filter(v => v.length >= 2);
+      const chunks: string[][] = [];
+      for (let i = 0; i < arr.length; i += 30) chunks.push(arr.slice(i, i + 30));
+      for (const ch of chunks) {
+        const snap = await getDocs(query(ref, where('estudioId', '==', estudioId), where('procesado', '==', false), where('ASGINADO', 'in', ch)));
+        const found = snap.docs.find(d => matchPerfil(d.data()));
+        if (found) return { id: found.id, ...found.data() } as CasoModel;
+      }
+    }
+
+    // Libres del estudio
+    const snapLibre = await getDocs(query(ref, where('estudioId', '==', estudioId), where('procesado', '==', false), where('ASGINADO', '==', '')));
+    const libre = snapLibre.docs.find(d => matchPerfil(d.data()));
+    if (libre) return { id: libre.id, ...libre.data() } as CasoModel;
+    return null;
+  }
+
+  async getCasoAsignadoAEstudio(estudioId: string, apodo: string, email?: string): Promise<CasoModel | null> {
+    const ref = collection(this.db, COL_CASOS_VENTA_SI);
+    const variantes = this._buildVariantes(apodo, email);
+    const arr = Array.from(variantes).filter(v => v.length >= 2);
+    for (let i = 0; i < arr.length; i += 30) {
+      const ch = arr.slice(i, i + 30);
+      const snap = await getDocs(query(ref, where('estudioId', '==', estudioId), where('procesado', '==', false), where('ASGINADO', 'in', ch)));
+      if (!snap.empty) return { id: snap.docs[0].id, ...snap.docs[0].data() } as CasoModel;
+    }
+    return null;
+  }
+
+  async reservarCasoEstudio(id: string, apodo: string): Promise<void> {
+    await updateDoc(doc(this.db, COL_CASOS_VENTA_SI, id), { ASGINADO: apodo });
+  }
+
+  async marcarProcesadoEstudio(id: string, estado: EstadoCaso, procesadoPor: string, asignado = '', caso?: any, comentario = ''): Promise<void> {
+    const ts = new Date().toISOString();
+    const apodoEfectivo = (asignado || procesadoPor).trim();
+    const entrada: any = { estado, timestamp: ts, por: procesadoPor, apodo: apodoEfectivo };
+    if (comentario) entrada.comentario = comentario;
+    const updateData: any = {
+      procesado: true, estado, procesadoPor,
+      ASGINADO: apodoEfectivo,
+      procesadoTimestamp: serverTimestamp(),
+      historialEstados: arrayUnion(entrada),
+    };
+    if (estado === 'acepto') {
+      const hoy = new Date();
+      updateData.fechaAcepto = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+    }
+    await updateDoc(doc(this.db, COL_CASOS_VENTA_SI, id), updateData);
+  }
+
+  // ─── STATS Y QUERIES POR ESTUDIO ────────────────────────────────────────
+
+  async getEstudioIdPorEmail(email: string): Promise<string | null> {
+    const snap = await getDocs(query(collection(this.db, COL_USUARIOS), where('email', '==', email)));
+    if (snap.empty) return null;
+    return (snap.docs[0].data() as any).estudioId ?? null;
+  }
+
+  async actualizarUsuarioPorUid(uid: string, data: Record<string, any>): Promise<void> {
+    await updateDoc(doc(this.db, COL_USUARIOS, uid), data);
+  }
+
+  async getUsuarioPorEmail(email: string): Promise<UsuarioApp | null> {
+    const snap = await getDocs(query(collection(this.db, COL_USUARIOS), where('email', '==', email)));
+    if (snap.empty) return null;
+    return snap.docs[0].data() as UsuarioApp;
+  }
+
+  async getUsuariosPorEstudio(estudioId: string): Promise<UsuarioApp[]> {
+    const snap = await getDocs(query(collection(this.db, COL_USUARIOS), where('estudioId', '==', estudioId)));
+    return snap.docs.map(d => d.data() as UsuarioApp);
+  }
+
+  async getHistorialEstudio(estudioId: string): Promise<CasoModel[]> {
+    const snap = await getDocs(query(
+      collection(this.db, COL_CASOS_VENTA_SI),
+      where('estudioId', '==', estudioId),
+      where('procesado', '==', true),
+    ));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as CasoModel));
+  }
+
+  async getCasosEnColaEstudio(estudioId: string): Promise<CasoModel[]> {
+    const snap = await getDocs(query(
+      collection(this.db, COL_CASOS_VENTA_SI),
+      where('estudioId', '==', estudioId),
+      where('procesado', '==', false),
+    ));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as CasoModel));
+  }
+
+  async getCantidadEnColaEstudio(estudioId: string): Promise<number> {
+    const snap = await getDocs(query(
+      collection(this.db, COL_CASOS_VENTA_SI),
+      where('estudioId', '==', estudioId),
+      where('procesado', '==', false),
+    ));
+    return snap.docs.length;
   }
 }

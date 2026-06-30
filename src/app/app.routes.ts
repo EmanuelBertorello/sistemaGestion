@@ -8,8 +8,10 @@ import { DashboardJosefina } from './comp/dashboard-josefina/dashboard-josefina'
 import { DashboardProcurar } from './comp/dashboard-procurar/dashboard-procurar';
 import { ModuleSelector } from './comp/module-selector/module-selector';
 import { CrearUsuario } from './comp/crear-usuario/crear-usuario';
-import { authGuard, adminGuard, abogadoGuard, iniciadoresGuard, procurarGuard, srtGuard, sisfeGuard } from './guards/auth.guard';
+import { authGuard, adminGuard, abogadoGuard, iniciadoresGuard, procurarGuard, srtGuard, sisfeGuard, estudioAdminGuard } from './guards/auth.guard';
 import { DashboardArca } from './comp/dashboard-arca/dashboard-arca';
+import { DashboardEstudio } from './comp/dashboard-estudio/dashboard-estudio';
+import { DashboardSuperadmin } from './comp/dashboard-superadmin/dashboard-superadmin';
 
 export const routes: Routes = [
   { path: '', component: Landing },
@@ -23,4 +25,6 @@ export const routes: Routes = [
   { path: 'dashboard-srt',   component: DashboardArca, canActivate: [srtGuard],   data: { modulo: 'srt',   titulo: 'SRT' } },
   { path: 'dashboard-sisfe', component: DashboardArca, canActivate: [sisfeGuard], data: { modulo: 'sisfe', titulo: 'SISFE' } },
   { path: 'crear-usuario', component: CrearUsuario, canActivate: [adminGuard] },
+  { path: 'dashboard-estudio', component: DashboardEstudio, canActivate: [estudioAdminGuard] },
+  { path: 'dashboard-superadmin', component: DashboardSuperadmin, canActivate: [adminGuard] },
 ];

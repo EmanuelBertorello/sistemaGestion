@@ -86,3 +86,16 @@ export const sisfeGuard: CanActivateFn = async () => {
 
 // kept for backward-compat (not used in routes anymore)
 export const josefinaGuard = iniciadoresGuard;
+
+export const estudioAdminGuard: CanActivateFn = async () => {
+  const auth = inject(AuthService);
+  const fs = inject(FirestoreService);
+  const router = inject(Router);
+  const email = auth.getCurrentEmail();
+  if (!email) { router.navigate(['/login']); return false; }
+  if (auth.isAdmin()) return true;
+  const usuario = await fs.getUsuarioPorEmail(email);
+  if (usuario?.esAdminEstudio && usuario?.estudioId) return true;
+  router.navigate(['/login']);
+  return false;
+};

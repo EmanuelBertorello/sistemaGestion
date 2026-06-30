@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
+import { FirestoreService } from '../../services/firestore.service';
 
 @Component({
   selector: 'app-login',
@@ -26,7 +27,7 @@ export class Login {
   resetSuccess = false;
   resetError = '';
 
-  constructor(private auth: AuthService, private router: Router) {}
+  constructor(private auth: AuthService, private fs: FirestoreService, private router: Router) {}
 
   togglePassword() {
     this.showPassword = !this.showPassword;
@@ -41,10 +42,17 @@ export class Login {
     this.errorMsg = '';
     try {
       await this.auth.login(this.email, this.password);
-      if (this.email.toLowerCase() === 'bcapeletti@hotmail.com') {
+      if (this.auth.isSuperAdmin()) {
+        this.router.navigate(['/dashboard-superadmin']);
+      } else if (this.auth.isAdmin()) {
         this.router.navigate(['/dashboard-admin']);
       } else {
-        this.router.navigate(['/modulos']);
+        const usuario = await this.fs.getUsuarioPorEmail(this.email.toLowerCase());
+        if (usuario?.esAdminEstudio && usuario?.estudioId) {
+          this.router.navigate(['/dashboard-estudio']);
+        } else {
+          this.router.navigate(['/modulos']);
+        }
       }
     } catch (err: any) {
       this.errorMsg = this.mapError(err.code);

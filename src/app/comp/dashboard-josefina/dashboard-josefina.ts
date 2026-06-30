@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { FirestoreService } from '../../services/firestore.service';
+import { StorageService } from '../../services/storage.service';
 import { CasoModel } from '../dashboard-llamador/caso.model';
 import { Expediente } from '../dashboard-abogado/expediente.model';
 import { ETAPAS_ARCA } from '../dashboard-arca/dashboard-arca';
@@ -29,7 +30,7 @@ interface CalEvento {
   templateUrl: './dashboard-josefina.html',
 })
 export class DashboardJosefina implements OnInit {
-  seccion: 'casos' | 'expedientes' | 'calculadoras' | 'agenda' | 'llamadoras' = 'casos';
+  seccion: 'casos' | 'expedientes' | 'calculadoras' | 'agenda' | 'llamadoras' | 'cargar' = 'casos';
   readonly ETAPAS_ARCA = ETAPAS_ARCA;
 
   // ── Casos ─────────────────────────────────────────────────────────────────
@@ -79,8 +80,107 @@ export class DashboardJosefina implements OnInit {
 
   calEventos: CalEvento[] = [];
 
+  // ── Cargar Caso ────────────────────────────────────────────────────────────
+  nuevoCaso = {
+    tipo: 'accidente' as 'accidente' | 'enfermedad',
+    trabajador: '', cuil: '', art: '', empresa: '',
+    tipoAccidente: '', localidad: '', provincia: '',
+    fechaAccidente: '', diasIlt: '', diagnostico: '',
+    descripcion: '',
+  };
+  ncAnexo: File | null = null;
+  ncDni: File | null = null;
+  ncAlta: File | null = null;
+  ncSecuelas: File[] = [];
+  ncSubiendo = false;
+  ncProgreso = 0;
+  ncError = '';
+  ncExito = '';
+
+  resetNuevoCaso() {
+    this.nuevoCaso = {
+      tipo: 'accidente', trabajador: '', cuil: '', art: '', empresa: '',
+      tipoAccidente: '', localidad: '', provincia: '',
+      fechaAccidente: '', diasIlt: '', diagnostico: '', descripcion: '',
+    };
+    this.ncAnexo = null; this.ncDni = null; this.ncAlta = null;
+    this.ncSecuelas = []; this.ncError = ''; this.ncExito = '';
+    this.ncSubiendo = false; this.ncProgreso = 0;
+  }
+
+  onNcFile(event: Event, campo: 'anexo' | 'dni' | 'alta') {
+    const file = (event.target as HTMLInputElement).files?.[0] ?? null;
+    if (campo === 'anexo') this.ncAnexo = file;
+    if (campo === 'dni') this.ncDni = file;
+    if (campo === 'alta') this.ncAlta = file;
+  }
+
+  onNcSecuelas(event: Event) {
+    const files = (event.target as HTMLInputElement).files;
+    if (files) this.ncSecuelas = [...this.ncSecuelas, ...Array.from(files)];
+  }
+
+  quitarSecuela(i: number) { this.ncSecuelas = this.ncSecuelas.filter((_, idx) => idx !== i); }
+
+  async guardarNuevoCaso() {
+    const nc = this.nuevoCaso;
+    if (!nc.trabajador.trim()) { this.ncError = 'El nombre del trabajador es obligatorio.'; return; }
+    if (!nc.cuil.trim()) { this.ncError = 'El CUIL es obligatorio.'; return; }
+
+    this.ncSubiendo = true;
+    this.ncError = '';
+    this.ncExito = '';
+    this.ncProgreso = 0;
+    this.cdr.detectChanges();
+
+    try {
+      const casoId = await this.fs.crearCasoManual({
+        Trabajador: nc.trabajador.trim(),
+        CUIL: nc.cuil.replace(/\D/g, ''),
+        ART: nc.art.trim(),
+        Emp_Denominacion: nc.empresa.trim(),
+        Tipo_Accidente: nc.tipo === 'enfermedad' ? 'Enfermedad Profesional' : (nc.tipoAccidente.trim() || 'Accidente Laboral'),
+        Localidad_Ocurrencia: nc.localidad.trim(),
+        Provincia_Ocurrencia: nc.provincia.trim(),
+        Fecha_Accidente: nc.fechaAccidente,
+        Dias_ILT: nc.diasIlt,
+        Diag_1: nc.diagnostico.trim(),
+        Descripcion_Siniestro: nc.descripcion.trim(),
+        ASGINADO: 'josefina',
+        procesadoPor: this.auth.getCurrentEmail(),
+      });
+
+      if (this.ncAnexo || this.ncDni) {
+        const docs = await this.storage.subirDocumentacion(
+          casoId,
+          {
+            anexo: this.ncAnexo!,
+            dni: this.ncDni!,
+            ...(this.ncAlta ? { altaMedica: this.ncAlta } : {}),
+            ...(this.ncSecuelas.length > 0 ? { secuela: this.ncSecuelas } : {}),
+          },
+          'josefina',
+          pct => { this.ncProgreso = pct; this.cdr.detectChanges(); }
+        );
+        await this.fs.guardarDocumentacionCaso(casoId, docs);
+      }
+
+      this.ncExito = `Caso de ${nc.trabajador} cargado correctamente.`;
+      this.resetNuevoCaso();
+      this.ncExito = `Caso cargado correctamente.`;
+      const casos = await this.fs.getCasosParaJosefina();
+      this.casos = casos;
+    } catch (e: any) {
+      this.ncError = 'Error: ' + (e.message ?? 'Intentá de nuevo.');
+    } finally {
+      this.ncSubiendo = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   constructor(
     private fs: FirestoreService,
+    private storage: StorageService,
     private auth: AuthService,
     public router: Router,
     private cdr: ChangeDetectorRef,
@@ -278,13 +378,37 @@ export class DashboardJosefina implements OnInit {
     return ({ audiencia: 'text-rose-600 bg-rose-50', vencimiento: 'text-amber-600 bg-amber-50', cita: 'text-blue-600 bg-blue-50', otro: 'text-gray-600 bg-gray-100' } as any)[tipo] ?? 'text-gray-600 bg-gray-100';
   }
 
+  // ── No Va ──────────────────────────────────────────────────────────────────
+  confirmNoVa: string | null = null;
+  marcandoNoVa: Record<string, boolean> = {};
+
+  async marcarNoVa(caso: CasoModel): Promise<void> {
+    if (!caso.id) return;
+    this.marcandoNoVa[caso.id] = true;
+    this.cdr.detectChanges();
+    try {
+      await this.fs.marcarCasoNoVa(caso.id);
+      this.casos = this.casos.filter(c => c.id !== caso.id);
+      this.confirmNoVa = null;
+    } finally {
+      delete this.marcandoNoVa[caso.id!];
+      this.cdr.detectChanges();
+    }
+  }
+
   // ── Llamadoras Propias ──────────────────────────────────────────────────────
 
   readonly LLAMADORAS_PROPIAS = [
-    { label: 'Nanci',  apodo: 'nanci',  email: '' },
-    { label: 'CR',     apodo: 'cami',   email: 'cr4361990@gmail.com' },
-    { label: 'Daiana', apodo: 'daiana', email: 'daianadagostino18@gmail.com' },
-    { label: 'Iara',   apodo: 'iara',   email: '' },
+    { label: 'Nanci',     apodo: 'nanci',     email: '' },
+    { label: 'CR',        apodo: 'cami',      email: 'cr4361990@gmail.com' },
+    { label: 'Daiana',    apodo: 'daiana',     email: 'daianadagostino18@gmail.com' },
+    { label: 'Iara',      apodo: 'iara',       email: '' },
+    { label: 'Antoo',     apodo: 'ANTOO',      email: 'antofontana1960@gmail.com' },
+    { label: 'Georgina',  apodo: 'GEORGINA',   email: 'georginachitarroni30@hotmail.com' },
+    { label: 'Merce',     apodo: 'merce',      email: 'mercedesfretes7@gmail.com' },
+    { label: 'Ana',       apodo: 'ana',        email: 'anamorelli21@gmail.com' },
+    { label: 'Florencia', apodo: 'FLORENCIA',  email: 'pistochinif@gmail.com' },
+    { label: 'Jorgelina', apodo: 'JORGELINA',  email: 'kuki.8.jr@gmail.com' },
   ];
   readonly PAGO_POR_ACEPTO = 40_000;
   semanaOffset = 0;
@@ -333,33 +457,54 @@ export class DashboardJosefina implements OnInit {
     const { inicio, fin, dias } = this.semanaInfo;
     const t0 = inicio.getTime(), t1 = fin.getTime();
     return this.LLAMADORAS_PROPIAS.map(ll => {
-      const casos = this.historialLlamadoras.filter(c => {
+      const casosAcepto = this.historialLlamadoras.filter(c => {
         if (c.estado !== 'acepto') return false;
         if (!this.matchLlamadora(c, ll)) return false;
         const ts = this.tsToMs(c.procesadoTimestamp);
         return ts >= t0 && ts <= t1;
       });
+      const casosNoVa = this.historialLlamadoras.filter(c => {
+        if (c.estado !== 'nova') return false;
+        if (!this.matchLlamadora(c, ll)) return false;
+        const ts = this.tsToMs(c.novaTimestamp ?? c.procesadoTimestamp);
+        return ts >= t0 && ts <= t1;
+      });
       const porDia: Record<string, number> = {};
       const nombresPorDia: Record<string, string[]> = {};
       dias.forEach(d => { const k = d.toISOString().slice(0, 10); porDia[k] = 0; nombresPorDia[k] = []; });
-      casos.forEach(c => {
+      casosAcepto.forEach(c => {
         const ms = this.tsToMs(c.procesadoTimestamp);
         if (ms) {
           const k = new Date(ms).toISOString().slice(0, 10);
           if (k in porDia) { porDia[k]++; nombresPorDia[k].push(c.Trabajador ?? c.CUIL ?? '—'); }
         }
       });
-      return { label: ll.label, aceptos: casos.length, totalPagar: casos.length * this.PAGO_POR_ACEPTO, porDia, nombresPorDia, casos };
+      const netos = casosAcepto.length - casosNoVa.length;
+      return {
+        label: ll.label,
+        aceptos: casosAcepto.length,
+        noVa: casosNoVa.length,
+        netos: Math.max(0, netos),
+        totalPagar: Math.max(0, netos) * this.PAGO_POR_ACEPTO,
+        porDia, nombresPorDia,
+        casos: casosAcepto,
+        casosNoVa,
+      };
     });
   }
 
-  get resumenCasosSemana(): Array<{ llamadora: string; trabajador: string; cuil: string; art: string; diasIlt: string; fecha: string }> {
-    const rows: Array<{ llamadora: string; trabajador: string; cuil: string; art: string; diasIlt: string; fecha: string }> = [];
+  get resumenCasosSemana(): Array<{ llamadora: string; trabajador: string; cuil: string; art: string; diasIlt: string; fecha: string; noVa: boolean }> {
+    const rows: Array<{ llamadora: string; trabajador: string; cuil: string; art: string; diasIlt: string; fecha: string; noVa: boolean }> = [];
     for (const ll of this.statsLlamadoras) {
       for (const c of ll.casos) {
         const ms = this.tsToMs(c.procesadoTimestamp);
         const fecha = ms ? new Date(ms).toLocaleDateString('es-AR') : '—';
-        rows.push({ llamadora: ll.label, trabajador: c.Trabajador ?? '—', cuil: c.CUIL ?? '—', art: c.ART ?? '—', diasIlt: c.Dias_ILT ?? '—', fecha });
+        rows.push({ llamadora: ll.label, trabajador: c.Trabajador ?? '—', cuil: c.CUIL ?? '—', art: c.ART ?? '—', diasIlt: c.Dias_ILT ?? '—', fecha, noVa: false });
+      }
+      for (const c of ll.casosNoVa) {
+        const ms = this.tsToMs(c.novaTimestamp ?? c.procesadoTimestamp);
+        const fecha = ms ? new Date(ms).toLocaleDateString('es-AR') : '—';
+        rows.push({ llamadora: ll.label, trabajador: c.Trabajador ?? '—', cuil: c.CUIL ?? '—', art: c.ART ?? '—', diasIlt: c.Dias_ILT ?? '—', fecha, noVa: true });
       }
     }
     return rows;

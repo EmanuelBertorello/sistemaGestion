@@ -1,3 +1,41 @@
+@if (mostrarErrorPC) {
+  <div class="min-h-screen flex items-center justify-center" style="background: #008080">
+    <div style="width:500px; font-family:'Segoe UI',Tahoma,sans-serif; box-shadow: 4px 4px 0 rgba(0,0,0,0.3)">
+      <div style="background:linear-gradient(90deg,#000080,#1084d0); color:white; font-weight:bold; font-size:13px; padding:3px 6px; display:flex; align-items:center; justify-content:space-between">
+        <span>⚠ Error del sistema</span>
+        <span style="background:#c0c0c0; color:black; font-size:11px; padding:0 5px; border:1px outset #fff; cursor:pointer">✕</span>
+      </div>
+      <div style="background:#c0c0c0; padding:24px 20px; border:2px outset #fff">
+        <div style="display:flex; gap:16px; align-items:flex-start">
+          <span style="font-size:40px">⛔</span>
+          <div>
+            <p style="font-size:14px; font-weight:bold; margin-bottom:12px; color:#000">
+              Se ha producido un error crítico en el sistema.
+            </p>
+            <p style="font-size:12px; color:#333; margin-bottom:8px">
+              Error 0x0000007E: SYSTEM_THREAD_EXCEPTION_NOT_HANDLED
+            </p>
+            <p style="font-size:13px; color:#000; margin-bottom:16px">
+              <strong>Por favor, comunicarse con un técnico para asistencia inmediata.</strong>
+            </p>
+            <p style="font-size:11px; color:#666">
+              Referencia: KERNEL32.DLL — módulo de interfaz no disponible.<br>
+              Contacte al administrador del sistema.
+            </p>
+          </div>
+        </div>
+        <div style="text-align:center; margin-top:20px">
+          <button style="background:#c0c0c0; border:2px outset #fff; padding:4px 30px; font-size:12px; font-weight:bold; cursor:pointer"
+            disabled>
+            Aceptar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+@if (!mostrarErrorPC) {
 <div class="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col" style="background-color:var(--surface)">
 
   <!-- Header institucional -->
@@ -193,6 +231,14 @@
               <p class="text-xs text-gray-500">Ingresá el número de expediente para continuar.</p>
             }
           </div>
+        </div>
+
+        <!-- Confirmación del caso -->
+        <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 text-center">
+          <p class="text-[10px] text-amber-600 uppercase tracking-widest font-bold mb-1">Estás subiendo archivos para</p>
+          <p class="text-lg font-black text-gray-900">{{ (pendingCambioEstado?.caso ?? caso)?.Trabajador || '—' }}</p>
+          <p class="text-sm font-mono text-gray-600 mt-0.5">CUIL: {{ (pendingCambioEstado?.caso ?? caso)?.CUIL || '—' }}</p>
+          <p class="text-[11px] text-amber-600 mt-2 font-semibold">Verificá que los PDFs correspondan a esta persona</p>
         </div>
 
         <!-- Campos -->
@@ -1074,11 +1120,11 @@
                 <tbody>
                   @for (c of historialFiltrado; track c.id) {
                     <tr class="border-b border-gray-100 hover:bg-blue-50 transition">
-                      <td class="px-4 py-3 font-semibold text-gray-800 cursor-pointer" (click)="casoModal = c">{{ c.Trabajador || '—' }}</td>
-                      <td class="px-4 py-3 text-gray-500 font-mono text-xs cursor-pointer" (click)="casoModal = c">{{ c.CUIL || '—' }}</td>
-                      <td class="px-4 py-3 text-center font-bold text-blue-600 cursor-pointer" (click)="casoModal = c">{{ c.Dias_ILT || '—' }}</td>
-                      <td class="px-4 py-3 text-gray-600 cursor-pointer" (click)="casoModal = c">{{ c.Diag_1 || '—' }}</td>
-                      <td class="px-4 py-3 text-gray-600 cursor-pointer" (click)="casoModal = c">{{ c.zona || '—' }}</td>
+                      <td class="px-4 py-3 font-semibold text-gray-800 cursor-pointer" (click)="abrirCasoModal(c)">{{ c.Trabajador || '—' }}</td>
+                      <td class="px-4 py-3 text-gray-500 font-mono text-xs cursor-pointer" (click)="abrirCasoModal(c)">{{ c.CUIL || '—' }}</td>
+                      <td class="px-4 py-3 text-center font-bold text-blue-600 cursor-pointer" (click)="abrirCasoModal(c)">{{ c.Dias_ILT || '—' }}</td>
+                      <td class="px-4 py-3 text-gray-600 cursor-pointer" (click)="abrirCasoModal(c)">{{ c.Diag_1 || '—' }}</td>
+                      <td class="px-4 py-3 text-gray-600 cursor-pointer" (click)="abrirCasoModal(c)">{{ c.zona || '—' }}</td>
                       <td class="px-4 py-3 text-center" (click)="$event.stopPropagation()">
                         @if (cambiandoEstado[c.id!]) {
                           <svg class="animate-spin h-4 w-4 text-blue-500 mx-auto" fill="none" viewBox="0 0 24 24">
@@ -1537,12 +1583,12 @@
             <p class="text-xs font-mono text-gray-700">{{ casoModal.Nro_AT || '—' }}</p>
           </div>
 
-          <!-- Certero -->
-          @if (casoModal.certeroData && !casoModal.certeroData['_noEncontrado']) {
+          <!-- Certero: contacto del trabajador -->
+          @if (modalCertero && !modalCertero._noEncontrado) {
             <div class="bg-blue-50 rounded-xl p-3 col-span-2">
               <p class="text-xs text-blue-600 font-bold uppercase tracking-wider mb-2">Contacto (Certero)</p>
               <div class="flex flex-col gap-1.5">
-                @for (cel of (casoModal.certeroData['celulares'] ?? []); track cel.numCompleto) {
+                @for (cel of (modalCertero.celulares ?? []); track cel.numCompleto) {
                   <div class="flex items-center gap-2">
                     <span class="text-xs text-gray-400 w-12 shrink-0">📱 Cel</span>
                     <button (click)="abrirWaNumero(cel.codigoArea, cel.numero, casoModal.Trabajador)"
@@ -1551,19 +1597,102 @@
                     </button>
                   </div>
                 }
-                @for (mail of (casoModal.certeroData['emails'] ?? []); track mail.direccion) {
+                @for (fijo of (modalCertero.telefonosFijos ?? []); track fijo.numCompleto) {
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-400 w-12 shrink-0">📞 Fijo</span>
+                    <span class="text-sm font-mono text-gray-700">{{ fijo.codigoArea }} {{ fijo.numero }}</span>
+                  </div>
+                }
+                @for (mail of (modalCertero.emails ?? []); track mail.direccion) {
                   <div class="flex items-center gap-2">
                     <span class="text-xs text-gray-400 w-12 shrink-0">✉ Mail</span>
                     <span class="text-xs text-gray-700 break-all">{{ mail.direccion }}</span>
                   </div>
                 }
-                @for (dom of (casoModal.certeroData['domicilios'] ?? []).slice(0,2); track $index) {
+                @for (dom of (modalCertero.domicilios ?? []).slice(0,2); track $index) {
                   <div class="flex items-start gap-2">
                     <span class="text-xs text-gray-400 w-12 shrink-0 pt-0.5">📍 Dom</span>
                     <span class="text-xs text-gray-700">{{ dom.calle }} {{ dom.altura || '' }}, {{ dom.localidad }}, {{ dom.provincia }}</span>
                   </div>
                 }
               </div>
+            </div>
+
+            <!-- Familiares / Relaciones -->
+            @if (modalCertero.relaciones && modalCertero.relaciones.length > 0) {
+              <div class="bg-purple-50 rounded-xl p-3 col-span-2">
+                <p class="text-xs text-purple-600 font-bold uppercase tracking-wider mb-2">Familiares</p>
+                <div class="flex flex-col gap-2">
+                  @for (r of modalCertero.relaciones; track r.cuil) {
+                    <div class="bg-white rounded-lg p-2.5 border border-purple-100">
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <p class="text-sm font-semibold text-gray-800">{{ r.nombreCompleto || (r.nombre + ' ' + r.apellido) }}</p>
+                          <p class="text-xs text-gray-400">{{ r.relacion }} · {{ r.documento }}</p>
+                        </div>
+                        @if (!modalRelContactos[r.cuil]) {
+                          <button (click)="buscarContactoFamiliar(r.cuil)"
+                            [disabled]="modalCargandoRel[r.cuil]"
+                            class="text-xs bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition font-medium">
+                            @if (modalCargandoRel[r.cuil]) {
+                              Buscando...
+                            } @else {
+                              Ver teléfonos
+                            }
+                          </button>
+                        }
+                      </div>
+                      @if (modalRelContactos[r.cuil]) {
+                        <div class="mt-2 flex flex-col gap-1 border-t border-purple-100 pt-2">
+                          @if (modalRelContactos[r.cuil]!._noEncontrado) {
+                            <p class="text-xs text-gray-400 italic">Sin datos en Certero.</p>
+                          }
+                          @if (!modalRelContactos[r.cuil]!._noEncontrado) {
+                            @if (modalRelContactos[r.cuil]!.celulares && modalRelContactos[r.cuil]!.celulares!.length > 0) {
+                              @for (c of modalRelContactos[r.cuil]!.celulares; track $index) {
+                                <div class="flex items-center gap-2">
+                                  <span class="text-xs text-gray-400 w-10 shrink-0">📱</span>
+                                  <button (click)="abrirWaNumero(c.codigoArea, c.numero, r.nombreCompleto || r.nombre)"
+                                    class="text-green-600 font-semibold font-mono text-sm hover:underline">
+                                    {{ c.codigoArea }} {{ c.numero }}
+                                  </button>
+                                </div>
+                              }
+                            }
+                            @if (modalRelContactos[r.cuil]!.telefonosFijos && modalRelContactos[r.cuil]!.telefonosFijos!.length > 0) {
+                              @for (t of modalRelContactos[r.cuil]!.telefonosFijos; track $index) {
+                                <div class="flex items-center gap-2">
+                                  <span class="text-xs text-gray-400 w-10 shrink-0">📞</span>
+                                  <span class="text-sm font-mono text-gray-700">{{ t.codigoArea }} {{ t.numero }}</span>
+                                </div>
+                              }
+                            }
+                            @if ((!modalRelContactos[r.cuil]!.celulares || modalRelContactos[r.cuil]!.celulares!.length === 0) &&
+                                 (!modalRelContactos[r.cuil]!.telefonosFijos || modalRelContactos[r.cuil]!.telefonosFijos!.length === 0)) {
+                              <p class="text-xs text-gray-400 italic">Sin teléfonos registrados.</p>
+                            }
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          }
+
+          <!-- Botón buscar Certero si no hay datos -->
+          @if (!modalCertero || modalCertero._noEncontrado) {
+            <div class="col-span-2 flex justify-center">
+              <button (click)="buscarCerteroModal()"
+                [disabled]="modalCargandoCertero"
+                class="text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl transition font-semibold">
+                @if (modalCargandoCertero) {
+                  Buscando en Certero...
+                } @else {
+                  Buscar contacto y familiares
+                }
+              </button>
             </div>
           }
 
@@ -1828,4 +1957,5 @@
 
     </div>
   </div>
+}
 }

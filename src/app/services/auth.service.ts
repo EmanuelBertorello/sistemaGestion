@@ -51,6 +51,10 @@ export class AuthService {
     return email === 'bcapeletti@hotmail.com' || email === 'ema-ber2011@live.com.ar';
   }
 
+  isSuperAdmin(): boolean {
+    return (this.auth.currentUser?.email ?? '') === 'ema-ber2011@live.com.ar';
+  }
+
   async cambiarPassword(nuevaPassword: string, passwordActual?: string): Promise<void> {
     const user = this.auth.currentUser;
     if (!user) throw new Error('No hay usuario autenticado');

@@ -2,7 +2,14 @@ import { Injectable } from '@angular/core';
 import { PDFDocument } from 'pdf-lib';
 import { CasoModel } from '../comp/dashboard-llamador/caso.model';
 
-const LETRADO = {
+export interface DatosLetrado {
+  nombre: string;
+  cuit: string;
+  email: string;
+  matricula: string;
+}
+
+const LETRADO_DEFAULT: DatosLetrado = {
   nombre:    'Bruno Capeletti',
   cuit:      '20-28314387-3',
   email:     'bcapeletti@hotmail.com',
@@ -14,7 +21,8 @@ const TEMPLATE_PATH = '/assets/anexo-srt-template.pdf.pdf';
 @Injectable({ providedIn: 'root' })
 export class AnexoService {
 
-  async generarAnexo(caso: CasoModel): Promise<void> {
+  async generarAnexo(caso: CasoModel, letrado?: DatosLetrado): Promise<void> {
+    const LETRADO = letrado ?? LETRADO_DEFAULT;
     // ── Cargar template ─────────────────────────────────────
     let templateBytes: ArrayBuffer;
     try {

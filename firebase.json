@@ -6,7 +6,7 @@
     "rules": "storage.rules"
   },
   "hosting": {
-    "site": "bdcap-a3b7b",
+    "site": "caoe2026",
     "public": "dist/my-app/browser",
     "ignore": [
       "firebase.json",

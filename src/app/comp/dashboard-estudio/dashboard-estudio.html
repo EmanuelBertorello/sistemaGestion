@@ -1,0 +1,221 @@
+<div class="min-h-screen bg-gray-50 flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-[#0C1A35] text-white px-6 h-12 flex items-center gap-4 shadow-lg shrink-0">
+    <div class="flex items-center gap-2">
+      <div class="w-6 h-6 rounded bg-purple-500 flex items-center justify-center text-xs font-black">E</div>
+      <span class="text-sm font-bold tracking-tight">{{ estudio?.nombre ?? 'Estudio' }}</span>
+    </div>
+    <div class="flex items-center gap-2 text-xs text-gray-300">
+      <span class="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-semibold">{{ totalPendientes }} en cola</span>
+      <span class="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full font-semibold">{{ totalAceptos }} aceptos</span>
+    </div>
+    <div class="ml-auto">
+      <button (click)="cerrarSesion()" class="text-xs text-gray-400 hover:text-red-400 transition px-2 py-1 rounded hover:bg-white/10">
+        Salir
+      </button>
+    </div>
+  </header>
+
+  <!-- Nav -->
+  <div class="bg-white border-b border-gray-100 px-6 flex items-center gap-1 shrink-0">
+    <button (click)="seccion = 'stats'" class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-purple-500]="seccion === 'stats'" [class.text-purple-700]="seccion === 'stats'"
+      [class.border-transparent]="seccion !== 'stats'" [class.text-gray-500]="seccion !== 'stats'">Estadísticas</button>
+    <button (click)="seccion = 'cola'" class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-purple-500]="seccion === 'cola'" [class.text-purple-700]="seccion === 'cola'"
+      [class.border-transparent]="seccion !== 'cola'" [class.text-gray-500]="seccion !== 'cola'">Cola</button>
+    <button (click)="seccion = 'historial'" class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-purple-500]="seccion === 'historial'" [class.text-purple-700]="seccion === 'historial'"
+      [class.border-transparent]="seccion !== 'historial'" [class.text-gray-500]="seccion !== 'historial'">Historial</button>
+    <button (click)="seccion = 'llamadoras'" class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-purple-500]="seccion === 'llamadoras'" [class.text-purple-700]="seccion === 'llamadoras'"
+      [class.border-transparent]="seccion !== 'llamadoras'" [class.text-gray-500]="seccion !== 'llamadoras'">Llamadoras</button>
+  </div>
+
+  <!-- Content -->
+  <div class="flex-1 overflow-auto p-6">
+
+    @if (cargando) {
+      <div class="flex justify-center py-16">
+        <div class="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }
+
+    @if (!cargando) {
+
+      <!-- STATS -->
+      @if (seccion === 'stats') {
+        <div class="max-w-5xl mx-auto flex flex-col gap-6">
+
+          <!-- Resumen -->
+          <div class="grid grid-cols-3 gap-4">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <p class="text-3xl font-black text-purple-600">{{ totalPendientes }}</p>
+              <p class="text-xs text-gray-400 mt-1">Casos en cola</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <p class="text-3xl font-black text-green-600">{{ totalAceptos }}</p>
+              <p class="text-xs text-gray-400 mt-1">Aceptos totales</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <p class="text-3xl font-black text-blue-600">{{ llamadoras.length }}</p>
+              <p class="text-xs text-gray-400 mt-1">Llamadoras activas</p>
+            </div>
+          </div>
+
+          <!-- Stats semanales -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-bold text-gray-700">Semana {{ semanaLabel }}</h3>
+              <div class="flex items-center gap-2">
+                <button (click)="semanaOffset = semanaOffset - 1"
+                  class="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 transition text-xs">
+                  ◀
+                </button>
+                <button (click)="semanaOffset = semanaOffset + 1" [disabled]="esSemanaActual"
+                  class="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 transition text-xs disabled:opacity-30">
+                  ▶
+                </button>
+                <button (click)="semanaOffset = 0" [disabled]="esSemanaActual"
+                  class="text-xs text-blue-600 hover:underline px-2 disabled:opacity-30">Hoy</button>
+              </div>
+            </div>
+
+            @if (statsLlamadoras.length === 0) {
+              <p class="text-sm text-gray-400">No hay llamadoras registradas.</p>
+            }
+
+            <div class="flex flex-col gap-2">
+              @for (ll of statsLlamadoras; track ll.label) {
+                <div class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-sm font-bold text-purple-700">
+                      {{ ll.label.charAt(0).toUpperCase() }}
+                    </div>
+                    <span class="font-medium text-gray-800">{{ ll.label }}</span>
+                  </div>
+                  <div class="flex items-center gap-4">
+                    <span class="text-sm text-gray-500">{{ ll.aceptos }} acepto{{ ll.aceptos !== 1 ? 's' : '' }}</span>
+                    <span class="text-sm font-bold text-green-700">${{ ll.totalPagar.toLocaleString('es-AR') }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <div class="border-t border-gray-100 mt-4 pt-4 flex items-center justify-between">
+              <span class="text-sm font-bold text-gray-700">Total semana</span>
+              <span class="text-lg font-black text-green-700">
+                ${{ statsLlamadoras.reduce((s, l) => s + l.totalPagar, 0).toLocaleString('es-AR') }}
+              </span>
+            </div>
+          </div>
+
+        </div>
+      }
+
+      <!-- COLA -->
+      @if (seccion === 'cola') {
+        <div class="max-w-5xl mx-auto">
+          <h3 class="text-sm font-bold text-gray-700 mb-3">Casos en cola ({{ casosEnCola.length }})</h3>
+          @if (casosEnCola.length === 0) {
+            <p class="text-sm text-gray-400 py-8 text-center">No hay casos en cola.</p>
+          }
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b border-gray-200 text-left text-gray-400 uppercase tracking-wider bg-gray-50">
+                  <th class="px-4 py-3">Trabajador</th>
+                  <th class="px-4 py-3">CUIL</th>
+                  <th class="px-4 py-3">ART</th>
+                  <th class="px-4 py-3">Provincia</th>
+                  <th class="px-4 py-3">ILT</th>
+                  <th class="px-4 py-3">Asignado</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (c of casosEnCola; track c.id) {
+                  <tr class="border-b border-gray-50 hover:bg-gray-50">
+                    <td class="px-4 py-2.5 font-semibold text-gray-800">{{ c.Trabajador || '—' }}</td>
+                    <td class="px-4 py-2.5 text-gray-500 font-mono">{{ c.CUIL || '—' }}</td>
+                    <td class="px-4 py-2.5 text-gray-500">{{ c.ART || '—' }}</td>
+                    <td class="px-4 py-2.5 text-gray-500">{{ c.Provincia_Ocurrencia || '—' }}</td>
+                    <td class="px-4 py-2.5 text-gray-500 text-center">{{ c.Dias_ILT || '—' }}</td>
+                    <td class="px-4 py-2.5 text-gray-500">{{ c.ASGINADO || 'Libre' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+
+      <!-- HISTORIAL -->
+      @if (seccion === 'historial') {
+        <div class="max-w-5xl mx-auto">
+          <h3 class="text-sm font-bold text-gray-700 mb-3">Historial ({{ historial.length }} procesados)</h3>
+          @if (historial.length === 0) {
+            <p class="text-sm text-gray-400 py-8 text-center">Aún no hay casos procesados.</p>
+          }
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b border-gray-200 text-left text-gray-400 uppercase tracking-wider bg-gray-50">
+                  <th class="px-4 py-3">Trabajador</th>
+                  <th class="px-4 py-3">CUIL</th>
+                  <th class="px-4 py-3">Estado</th>
+                  <th class="px-4 py-3">Procesado por</th>
+                  <th class="px-4 py-3">ART</th>
+                  <th class="px-4 py-3">ILT</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (c of historial; track c.id) {
+                  <tr class="border-b border-gray-50 hover:bg-gray-50">
+                    <td class="px-4 py-2.5 font-semibold text-gray-800">{{ c.Trabajador || '—' }}</td>
+                    <td class="px-4 py-2.5 text-gray-500 font-mono">{{ c.CUIL || '—' }}</td>
+                    <td class="px-4 py-2.5">
+                      <span class="text-xs font-bold px-2 py-0.5 rounded-full"
+                        [class.bg-green-100]="c.estado === 'acepto'" [class.text-green-700]="c.estado === 'acepto'"
+                        [class.bg-red-100]="c.estado !== 'acepto'" [class.text-red-700]="c.estado !== 'acepto'">
+                        {{ c.estado }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-2.5 text-gray-500">{{ c.ASGINADO || c.procesadoPor || '—' }}</td>
+                    <td class="px-4 py-2.5 text-gray-500">{{ c.ART || '—' }}</td>
+                    <td class="px-4 py-2.5 text-gray-500 text-center">{{ c.Dias_ILT || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+
+      <!-- LLAMADORAS -->
+      @if (seccion === 'llamadoras') {
+        <div class="max-w-3xl mx-auto">
+          <h3 class="text-sm font-bold text-gray-700 mb-3">Llamadoras del estudio ({{ llamadoras.length }})</h3>
+          @if (llamadoras.length === 0) {
+            <p class="text-sm text-gray-400 py-8 text-center">No hay llamadoras registradas.</p>
+          }
+          <div class="flex flex-col gap-2">
+            @for (u of llamadoras; track u.uid) {
+              <div class="bg-white rounded-xl shadow-sm border border-gray-100 px-5 py-4 flex items-center gap-4">
+                <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-sm font-bold text-purple-700">
+                  {{ u.apodo.charAt(0).toUpperCase() }}
+                </div>
+                <div class="flex-1">
+                  <p class="font-semibold text-gray-800">{{ u.apodo }}</p>
+                  <p class="text-xs text-gray-400">{{ u.email }}</p>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+    }
+
+  </div>
+</div>

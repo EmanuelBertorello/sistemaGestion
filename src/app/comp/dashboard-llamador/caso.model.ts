@@ -4,6 +4,8 @@ export type EstadoCaso =
   | 'interesado'      // legacy (ahora es "pendiente")
   | 'nocontesto'      // legacy (ahora es "pendiente")
   | 'sincontacto'
+  | 'sinrespuesta'
+  | 'nova'
   | 'conabogado'
   | 'nointeresado'
   | '';
@@ -107,6 +109,9 @@ export interface CasoModel {
   ocultadoPor?: string[];   // emails de llamadores que ocultaron este caso de su historial
   nroExpediente?: string;
   fechaAcepto?: string;
+  novaTimestamp?: any;
+  estudioId?: string;
+  distribuidoEn?: any;
   telefonoContacto?: string;
   documentacion?: {
     anexoUrl: string;
@@ -116,6 +121,7 @@ export interface CasoModel {
     cargadoEn: string;
   };
   certeroData?: Record<string, any>;
+  contactosFamiliares?: Record<string, any>;
   recontactos?: Array<{ timestamp: string; comentario: string; por: string; apodo: string }>; // legacy
   seguimientos?: Array<{
     timestamp: string;

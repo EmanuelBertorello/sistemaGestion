@@ -1,0 +1,385 @@
+<div class="min-h-screen bg-gray-50 flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-[#0C1A35] text-white px-6 h-12 flex items-center gap-4 shadow-lg shrink-0">
+    <div class="flex items-center gap-2">
+      <div class="w-6 h-6 rounded bg-red-500 flex items-center justify-center text-xs font-black">S</div>
+      <span class="text-sm font-bold tracking-tight">Super Admin</span>
+    </div>
+    <div class="flex items-center gap-2 text-xs text-gray-300">
+      <span class="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full font-semibold">{{ estudios.length }} estudios</span>
+    </div>
+    <div class="ml-auto">
+      <button (click)="cerrarSesion()" class="text-xs text-gray-400 hover:text-red-400 transition px-2 py-1 rounded hover:bg-white/10">
+        Salir
+      </button>
+    </div>
+  </header>
+
+  <!-- Nav tabs -->
+  <div class="bg-white border-b border-gray-100 px-6 flex items-center gap-1 shrink-0">
+    <button (click)="seccion = 'estudios'; cargarEstudios()" class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-red-500]="seccion === 'estudios'" [class.text-red-700]="seccion === 'estudios'"
+      [class.border-transparent]="seccion !== 'estudios'" [class.text-gray-500]="seccion !== 'estudios'">
+      Estudios
+    </button>
+    <button (click)="seccion = 'distribuir'" class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-red-500]="seccion === 'distribuir'" [class.text-red-700]="seccion === 'distribuir'"
+      [class.border-transparent]="seccion !== 'distribuir'" [class.text-gray-500]="seccion !== 'distribuir'">
+      Distribuir
+    </button>
+    <button (click)="seccion = 'usuarios'; cargarUsuarios()" class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-red-500]="seccion === 'usuarios'" [class.text-red-700]="seccion === 'usuarios'"
+      [class.border-transparent]="seccion !== 'usuarios'" [class.text-gray-500]="seccion !== 'usuarios'">
+      Usuarios
+    </button>
+    <button (click)="seccion = 'cargar'" class="text-xs font-semibold px-4 py-3 border-b-2 transition"
+      [class.border-red-500]="seccion === 'cargar'" [class.text-red-700]="seccion === 'cargar'"
+      [class.border-transparent]="seccion !== 'cargar'" [class.text-gray-500]="seccion !== 'cargar'">
+      Cargar BD
+    </button>
+  </div>
+
+  <!-- Content -->
+  <div class="flex-1 overflow-auto p-6">
+
+    @if (cargando) {
+      <div class="flex justify-center py-16">
+        <div class="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }
+
+    @if (!cargando) {
+
+      <!-- ══════════ ESTUDIOS ══════════ -->
+      @if (seccion === 'estudios') {
+        <div class="max-w-5xl mx-auto flex flex-col gap-6">
+
+          <!-- Crear -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 class="text-sm font-bold text-gray-800 mb-3">Crear nuevo estudio</h3>
+            @if (estudioError) {
+              <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-red-600 text-xs">{{ estudioError }}</div>
+            }
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <input [(ngModel)]="estudioForm.nombre" placeholder="Nombre del estudio"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
+              <input [(ngModel)]="estudioForm.adminEmail" placeholder="Email del admin"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
+              <input [(ngModel)]="estudioForm.pagoPorAcepto" type="number" placeholder="$/acepto"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
+              <div></div>
+            </div>
+            <p class="text-xs text-gray-400 mt-3 mb-1 font-semibold uppercase tracking-wider">Datos del letrado (para el Anexo)</p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <input [(ngModel)]="estudioForm.letradoNombre" placeholder="Nombre del letrado"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
+              <input [(ngModel)]="estudioForm.letradoCuit" placeholder="CUIT letrado"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
+              <input [(ngModel)]="estudioForm.letradoEmail" placeholder="Email letrado"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
+              <input [(ngModel)]="estudioForm.letradoMatricula" placeholder="Matrícula"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
+            </div>
+            <div class="mt-3">
+              <button (click)="crearEstudio()" [disabled]="estudioGuardando"
+                class="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-semibold px-6 py-2 rounded-lg transition">
+                {{ estudioGuardando ? 'Creando...' : 'Crear estudio' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Lista -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 class="text-sm font-bold text-gray-800 mb-3">Estudios ({{ estudios.length }})</h3>
+            @if (estudios.length === 0) {
+              <p class="text-sm text-gray-400">No hay estudios registrados.</p>
+            }
+            <div class="flex flex-col gap-2">
+              @for (e of estudios; track e.id) {
+                <div class="flex items-center gap-4 bg-gray-50 rounded-xl px-4 py-3">
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+                    [class.bg-green-100]="e.activo" [class.text-green-700]="e.activo"
+                    [class.bg-gray-200]="!e.activo" [class.text-gray-400]="!e.activo">
+                    {{ e.nombre.charAt(0).toUpperCase() }}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-800">{{ e.nombre }}</p>
+                    <p class="text-xs text-gray-400">{{ e.adminEmail }} · ${{ e.pagoPorAcepto?.toLocaleString('es-AR') }}/acepto</p>
+                  </div>
+                  <span class="text-xs font-bold px-2 py-0.5 rounded-full"
+                    [class.bg-green-100]="e.activo" [class.text-green-700]="e.activo"
+                    [class.bg-red-100]="!e.activo" [class.text-red-600]="!e.activo">
+                    {{ e.activo ? 'Activo' : 'Inactivo' }}
+                  </span>
+                  <button (click)="toggleEstudio(e)"
+                    class="text-xs px-3 py-1.5 rounded-lg border transition"
+                    [class.border-red-200]="e.activo" [class.text-red-600]="e.activo"
+                    [class.border-green-200]="!e.activo" [class.text-green-600]="!e.activo">
+                    {{ e.activo ? 'Desactivar' : 'Activar' }}
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Reglas -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 class="text-sm font-bold text-gray-800 mb-1">Reglas de distribución</h3>
+            <p class="text-xs text-gray-400 mb-4">Primera regla que matchea por prioridad gana. Provincia obligatoria, resto opcional.</p>
+
+            @if (reglaError) {
+              <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-red-600 text-xs">{{ reglaError }}</div>
+            }
+
+            <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-4">
+              <select [(ngModel)]="reglaForm.estudioId"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300">
+                <option value="">Estudio...</option>
+                @for (e of estudios; track e.id) {
+                  <option [value]="e.id">{{ e.nombre }}</option>
+                }
+              </select>
+              <input [(ngModel)]="reglaForm.provincia" placeholder="Provincia"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
+              <input [(ngModel)]="reglaForm.artFiltro" placeholder="ARTs (coma sep.)"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
+              <input [(ngModel)]="reglaForm.minDiasILT" type="number" placeholder="ILT mín"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
+              <input [(ngModel)]="reglaForm.prioridad" type="number" placeholder="Prioridad"
+                class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"/>
+              <button (click)="agregarRegla()" [disabled]="reglaGuardando"
+                class="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-semibold px-3 py-2 rounded-lg transition">
+                {{ reglaGuardando ? '...' : 'Agregar' }}
+              </button>
+            </div>
+
+            @if (reglasDistribucion.length === 0) {
+              <p class="text-sm text-gray-400">No hay reglas configuradas.</p>
+            }
+            @for (r of reglasDistribucion; track r.id) {
+              <div class="flex items-center gap-3 bg-purple-50 border border-purple-100 rounded-xl px-4 py-2.5 mb-2">
+                <span class="text-xs text-purple-500 font-bold w-6">{{ r.prioridad }}</span>
+                <span class="text-sm font-semibold text-gray-800 w-32">{{ nombreEstudio(r.estudioId) }}</span>
+                <span class="text-sm text-gray-600 flex-1">
+                  {{ r.provincia }}
+                  @if (r.artFiltro?.length) { · ART: {{ r.artFiltro!.join(', ') }} }
+                  @if (r.minDiasILT) { · ILT ≥ {{ r.minDiasILT }} }
+                  @if (r.tipoCaso === '1') { · HighTicket }
+                  @if (r.tipoCaso === '0') { · Volumen }
+                </span>
+                <button (click)="eliminarRegla(r.id!)" class="text-red-400 hover:text-red-600 text-lg font-bold">×</button>
+              </div>
+            }
+          </div>
+
+        </div>
+      }
+
+      <!-- ══════════ DISTRIBUIR ══════════ -->
+      @if (seccion === 'distribuir') {
+        <div class="max-w-5xl mx-auto flex flex-col gap-6">
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 class="text-sm font-bold text-gray-800 mb-4">Distribuir VentaSI a estudios</h3>
+            <div class="flex items-center gap-3 mb-4">
+              <button (click)="previsualizarDist()" [disabled]="distribuyendo"
+                class="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
+                {{ distribuyendo ? 'Cargando...' : 'Preview' }}
+              </button>
+              @if (distribucionPreview.length > 0) {
+                <button (click)="ejecutarDistribucion()" [disabled]="distribuyendo"
+                  class="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
+                  Distribuir {{ distribucionPreview.length }} casos
+                </button>
+              }
+              @if (distribucionResultado) {
+                <span class="text-sm text-green-700 font-semibold">
+                  {{ distribucionResultado.distribuidos }} distribuidos · {{ distribucionResultado.sinMatch }} sin match
+                </span>
+              }
+            </div>
+
+            @if (distribucionPreview.length > 0) {
+              <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                <table class="w-full text-xs">
+                  <thead class="sticky top-0 bg-white">
+                    <tr class="border-b border-gray-200 text-left text-gray-400 uppercase tracking-wider">
+                      <th class="py-2 pr-3">Trabajador</th>
+                      <th class="py-2 pr-3">CUIL</th>
+                      <th class="py-2 pr-3">Provincia</th>
+                      <th class="py-2 pr-3">ART</th>
+                      <th class="py-2 pr-3">ILT</th>
+                      <th class="py-2 pr-3">Estudio</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (p of distribucionPreview; track p.caso.id) {
+                      <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-2 pr-3 font-semibold text-gray-700">{{ p.caso.Trabajador }}</td>
+                        <td class="py-2 pr-3 text-gray-500 font-mono">{{ p.caso.CUIL }}</td>
+                        <td class="py-2 pr-3 text-gray-500">{{ p.caso.Provincia_Ocurrencia }}</td>
+                        <td class="py-2 pr-3 text-gray-500">{{ p.caso.ART }}</td>
+                        <td class="py-2 pr-3 text-gray-500">{{ p.caso.Dias_ILT }}</td>
+                        <td class="py-2 pr-3 font-semibold text-purple-700">{{ p.estudioNombre }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+
+            @if (distribucionPreview.length === 0 && !distribuyendo && !distribucionResultado) {
+              <p class="text-sm text-gray-400">Hacé click en "Preview" para ver qué casos se distribuirían según las reglas configuradas.</p>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- ══════════ USUARIOS ══════════ -->
+      @if (seccion === 'usuarios') {
+        <div class="max-w-5xl mx-auto">
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 class="text-sm font-bold text-gray-800 mb-4">Usuarios del sistema ({{ usuarios.length }})</h3>
+
+            @if (cargandoUsuarios) {
+              <div class="flex justify-center py-8">
+                <div class="w-6 h-6 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            }
+
+            @if (!cargandoUsuarios && usuarios.length > 0) {
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs">
+                  <thead>
+                    <tr class="border-b border-gray-200 text-left text-gray-400 uppercase tracking-wider">
+                      <th class="py-2 pr-3">Email</th>
+                      <th class="py-2 pr-3">Apodo</th>
+                      <th class="py-2 pr-3">Rol</th>
+                      <th class="py-2 pr-3">Estudio</th>
+                      <th class="py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (u of usuarios; track u.uid) {
+                      <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-2 pr-3 text-gray-700 text-xs">{{ u.email }}</td>
+
+                        @if (editandoUid === u.uid) {
+                          <!-- Modo edición -->
+                          <td class="py-2 pr-3">
+                            <input [(ngModel)]="editApodo" class="border border-gray-300 rounded px-2 py-1 text-xs w-24 focus:outline-none focus:ring-1 focus:ring-red-300"/>
+                          </td>
+                          <td class="py-2 pr-3">
+                            <select [(ngModel)]="editRol" class="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-red-300">
+                              <option value="llamador">Llamador</option>
+                              <option value="abogado">Abogado</option>
+                              <option value="josefina">Josefina</option>
+                              <option value="admin_estudio">Admin Estudio</option>
+                            </select>
+                          </td>
+                          <td class="py-2 pr-3">
+                            <select [(ngModel)]="editEstudioId" class="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-red-300">
+                              <option value="">Capeletti</option>
+                              @for (e of estudios; track e.id) {
+                                <option [value]="e.id">{{ e.nombre }}</option>
+                              }
+                            </select>
+                          </td>
+                          <td class="py-2 text-right">
+                            <div class="flex items-center gap-1 justify-end">
+                              <button (click)="guardarUsuarioEdit(u)" [disabled]="guardandoUsuario[u.uid]"
+                                class="text-xs bg-green-600 text-white px-2 py-1 rounded font-semibold hover:bg-green-700 disabled:opacity-50 transition">
+                                {{ guardandoUsuario[u.uid] ? '...' : 'OK' }}
+                              </button>
+                              <button (click)="cancelarEdicion()"
+                                class="text-xs text-gray-500 px-2 py-1 rounded hover:bg-gray-100 transition">
+                                ✕
+                              </button>
+                            </div>
+                          </td>
+                        } @else {
+                          <!-- Modo vista -->
+                          <td class="py-2 pr-3 font-semibold text-gray-800">{{ u.apodo || '—' }}</td>
+                          <td class="py-2 pr-3">
+                            <span class="text-xs font-bold px-2 py-0.5 rounded-full"
+                              [class.bg-red-100]="u.esAdminEstudio" [class.text-red-700]="u.esAdminEstudio"
+                              [class.bg-blue-100]="!u.esAdminEstudio" [class.text-blue-700]="!u.esAdminEstudio">
+                              {{ rolLabel(u) }}
+                            </span>
+                          </td>
+                          <td class="py-2 pr-3 text-gray-500">{{ estudioDeUsuario(u) }}</td>
+                          <td class="py-2 text-right">
+                            <button (click)="editarUsuario(u)"
+                              class="text-xs text-blue-600 hover:text-blue-800 hover:underline transition">
+                              Editar
+                            </button>
+                          </td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- ══════════ CARGAR BD ══════════ -->
+      @if (seccion === 'cargar') {
+        <div class="max-w-3xl mx-auto">
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-4">
+            <h3 class="text-sm font-bold text-gray-800">Cargar base de datos (Excel)</h3>
+
+            <div>
+              <input type="file" accept=".xlsx,.xls" (change)="onArchivoSeleccionado($event)"
+                class="text-xs file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-red-50 file:text-red-700 file:font-semibold file:cursor-pointer"/>
+              @if (archivoNombre) {
+                <p class="text-xs text-gray-500 mt-1">{{ archivoNombre }}</p>
+              }
+            </div>
+
+            @if (uploadError) {
+              <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-red-600 text-xs">{{ uploadError }}</div>
+            }
+
+            @if (estadoUpload === 'preview') {
+              <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <p class="text-sm font-semibold text-blue-800 mb-2">{{ totalFilas }} filas detectadas</p>
+                <div class="flex gap-4 text-xs">
+                  <span class="bg-white px-3 py-1 rounded-lg text-gray-700">Venta NO: <b>{{ resumenVentaNo }}</b> → BDmadre</span>
+                  <span class="bg-white px-3 py-1 rounded-lg text-gray-700">Venta SI: <b>{{ resumenVentaSi }}</b> → VentaSI</span>
+                </div>
+                <button (click)="confirmarUpload()" class="mt-3 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-5 py-2 rounded-lg transition">
+                  Confirmar carga
+                </button>
+              </div>
+            }
+
+            @if (estadoUpload === 'subiendo') {
+              <div class="bg-blue-50 rounded-xl p-4">
+                <div class="flex items-center gap-3">
+                  <div class="w-6 h-6 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div class="flex-1">
+                    <p class="text-sm font-semibold text-blue-800">Subiendo... {{ uploadPct }}%</p>
+                    <div class="w-full bg-blue-200 rounded-full h-1.5 mt-1">
+                      <div class="bg-blue-600 h-1.5 rounded-full transition-all" [style.width]="uploadPct + '%'"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            }
+
+            @if (estadoUpload === 'done') {
+              <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-green-700 text-sm font-semibold">
+                Carga completada: {{ uploadSubidos }} / {{ uploadTotal }} registros subidos.
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+    }
+
+  </div>
+</div>
